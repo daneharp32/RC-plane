@@ -50,7 +50,7 @@ Do not share your Supabase service-role key. The website only uses the public an
 Set the two values in **.env** using **Supabase → Project Settings → API**:
 
     VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-    VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY
+    VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY
 
 Then start the development server:
 
@@ -69,7 +69,7 @@ Connect the **daneharp32/RC-plane** GitHub repository to Cloudflare Pages and us
 | Build output directory | dist |
 | Root directory | / |
 
-Add **VITE_SUPABASE_URL** and **VITE_SUPABASE_ANON_KEY** under **Settings → Environment variables** for the production environment. Add the deployed Pages URL to Supabase's Auth Redirect URLs. The **public/_redirects** file provides the SPA fallback.
+Add **VITE_SUPABASE_URL** and **VITE_SUPABASE_PUBLISHABLE_KEY** under **Settings → Environment variables** for the production environment. Add the deployed Pages URL to Supabase's Auth Redirect URLs. The **public/_redirects** file provides the SPA fallback.
 
 ## 4. Invite your friends
 
