@@ -302,6 +302,15 @@ create policy "Participants delete their own proof photos"
     and (storage.foldername(name))[1] = auth.uid()::text
   );
 
+-- Keep database RPC endpoints private to signed-in participants.
+revoke all on function public.handle_new_user() from public, anon, authenticated;
+revoke all on function public.touch_profile_updated_at() from public, anon, authenticated;
+revoke all on function public.is_challenge_owner() from public, anon;
+revoke all on function public.start_challenge() from public, anon;
+revoke all on function public.can_submit_week(integer) from public, anon;
+revoke all on function public.get_challenge_overview() from public, anon;
+revoke all on function public.get_leaderboard() from public, anon;
+
 grant select on public.challenge_settings to authenticated;
 grant select on public.profiles to authenticated;
 grant update (nickname) on public.profiles to authenticated;
