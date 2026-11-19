@@ -4,7 +4,7 @@
   "main": "src/worker.js",
   "compatibility_date": "2026-11-19",
   "assets": {
-    "directory": "./public",
+    "directory": "./public/",
     "binding": "ASSETS",
     "run_worker_first": ["/api/*"],
     "not_found_handling": "404-page"
@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "rc-plane-tracker",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "database_id": "51706583-1523-46a5-9116-58cc3f44be6d",
       "migrations_dir": "migrations"
     }
   ]
