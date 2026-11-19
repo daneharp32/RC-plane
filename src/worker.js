@@ -195,8 +195,8 @@ async function handleRegister(request, env) {
   if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) {
     return errorResponse("Usernames must be 3–20 characters and use only letters, numbers, or underscores.");
   }
-  if (password.length < 10 || password.length > 128) {
-    return errorResponse("Passwords must be at least 10 characters and no more than 128 characters.");
+  if (password.length < 6 || password.length > 128) {
+    return errorResponse("Passwords must be at least 6 characters and no more than 128 characters.");
   }
 
   const salt = crypto.getRandomValues(new Uint8Array(16));
