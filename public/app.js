@@ -639,6 +639,9 @@ $("#remove-photo-button").addEventListener("click", function () {
 
 $("#post-form").addEventListener("submit", async function (event) {
   event.preventDefault();
+  // currentTarget is only reliable during the synchronous event dispatch.
+  // Keep the form reference for use after the asynchronous API request.
+  const form = event.currentTarget;
   const button = $("#publish-post-button");
   showMessage($("#post-message"), "", false);
 
@@ -668,7 +671,7 @@ $("#post-form").addEventListener("submit", async function (event) {
       }
     });
 
-    event.currentTarget.reset();
+    form.reset();
     selectedPlanes = [];
     renderSelectedPlanes();
     clearPhoto();
