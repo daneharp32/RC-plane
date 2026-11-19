@@ -34,7 +34,7 @@ button { cursor: pointer; }
 .site-shell { width: min(1180px, calc(100% - 48px)); margin: 0 auto; }
 .topbar { height: 78px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #dfe6eb; }
 .brand { display: flex; align-items: center; gap: 11px; color: var(--ink); text-decoration: none; }
-.brand-mark { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: var(--navy); color: #fff; font-size: 21px; transform: rotate(-9deg); }
+.brand-logo { display: block; flex: 0 0 46px; width: 46px; height: 46px; object-fit: contain; border-radius: 13px; filter: drop-shadow(0 2px 4px rgba(20, 54, 83, .16)); }
 .brand-copy { display: flex; flex-direction: column; gap: 2px; letter-spacing: .12em; }
 .brand-copy strong { font-size: 12px; font-weight: 850; }
 .brand-copy small { color: var(--muted); font-size: 9px; font-weight: 750; letter-spacing: .19em; }
