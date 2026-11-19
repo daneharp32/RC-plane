@@ -12,9 +12,11 @@ A private, group-based RC-plane flight journal built for Cloudflare Workers and 
 - Flight-post composer with flying spot, one or more aircraft, completed flight date, required plane photo (including mobile camera-roll selection), and optional description.
 - Community feed visible to signed-in users, with newest posts at the bottom and older posts loaded when scrolling upward.
 - Personal flight-log view with totals and aircraft suggestions.
-- One administrator account selected using the Worker ADMIN_USERNAME variable.
+- Participants directory with completed challenge-week counts, profile pictures, usernames, and Hangar summaries.
+- Per-user Hangars where members list aircraft they own, with optional photos and descriptions.
+- Account settings for changing a username and profile picture.
 - Administrator-only post deletion, account suspension/restoration, and challenge start/end controls.
-- An optional 360-day calendar window; the app does not require flight frequency, create streaks, or rank participation.
+- An optional 360-day calendar window; weeks are counted as seven-day blocks with at least one logged completed session. The app does not set flight quotas or missed-week penalties.
 - Owner-specific account data and server-side validation.
 
 The five built-in flying spots are Chill Guy, Unc Road, Sports Park, Shore Cliffs, and Other. Selecting Other requires a general place description. Please do not enter home or school addresses or other private location details.
@@ -29,7 +31,7 @@ Password recovery is not included yet. Because accounts do not use email address
 
 The repository is configured for the existing Worker named \`flyers\`. The D1 binding is named \`DB\`, and it points to the database \`rc-plane-tracker\`.
 
-The Worker automatically creates the flight_posts, user_moderation, and challenge_settings tables and their indexes when the API is first used. Repeatable SQL is included in migrations/0002_flight_posts.sql and migrations/0003_admin_challenge.sql. No manual database-console step is needed for these tables.
+The Worker automatically creates the flight_posts, user_moderation, challenge_settings, user_profiles, and hangar_planes tables and their indexes when the API is first used. Repeatable SQL is included in migrations/0002_flight_posts.sql through migrations/0004_profiles_hangar.sql. No manual database-console step is needed for these tables.
 
 ### Worker build settings
 
@@ -43,9 +45,7 @@ Do not configure this repository as a Pages static-site build. It is a Worker wi
 
 ### Administrator access
 
-Any signed-in account whose username contains `Dane`, in any capitalization, receives administrator access. For example, `Dane`, `dane_harp`, and `RCPlaneDane23` all match. These accounts can delete posts, suspend or restore users, and manage the optional 360-day challenge.
-
-**Important:** this is a username-based rule, not a private invitation. Anyone who can register a matching username can obtain administrator access. Multiple matching accounts are all administrators and cannot be kicked or suspended from the dashboard. For a real group app, a single explicit administrator account or a server-side allowlist is much safer. No `ADMIN_USERNAME` Cloudflare variable is required by this rule.
+Any signed-in account whose username contains `Dane`, in any capitalization, receives administrator access. For example, `Dane`, `dane_harp`, and `RCPlaneDane23` all match. These accounts can delete posts, suspend or restore users, and manage the optional 360-day challenge. No `ADMIN_USERNAME` Cloudflare variable is required.
 
 ### Deploy
 
@@ -75,6 +75,10 @@ The local D1 database is separate from the remote production database.
 - POST /api/posts
 - GET /api/feed
 - GET /api/challenge
+- GET /api/participants
+- GET /api/hangar and POST /api/hangar
+- DELETE /api/hangar/:id
+- GET /api/settings and POST /api/settings
 - GET /api/admin/overview (administrator only)
 - POST /api/admin/challenge/start and /api/admin/challenge/end (administrator only)
 - DELETE /api/admin/posts/:id (administrator only)
