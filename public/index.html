@@ -77,7 +77,13 @@
         <nav class="app-nav" aria-label="Flight journal sections">
           <button id="feed-tab" class="nav-tab active" type="button" aria-current="page">Community feed</button>
           <button id="my-logs-tab" class="nav-tab" type="button">My flight logs</button>
+          <button id="admin-tab" class="nav-tab" type="button" hidden>Admin</button>
         </nav>
+
+        <aside id="challenge-banner" class="challenge-banner" hidden>
+          <strong id="challenge-banner-title">Optional 360-day challenge</strong>
+          <span id="challenge-banner-detail"></span>
+        </aside>
 
         <section id="feed-view" class="view-section">
           <div class="feed-intro">
@@ -208,6 +214,71 @@
               <button id="publish-post-button" class="button button-primary" type="submit">Post flight log</button>
             </div>
           </form>
+        </section>
+
+        <section id="admin-view" class="view-section admin-view" hidden>
+          <div class="feed-intro">
+            <div>
+              <p class="eyebrow">PRIVATE CONTROLS</p>
+              <h2>Administrator dashboard</h2>
+              <p class="muted">Only the designated administrator can see and use these controls.</p>
+            </div>
+            <span class="admin-badge">Administrator</span>
+          </div>
+
+          <section class="panel admin-panel challenge-admin-panel">
+            <div class="admin-panel-heading">
+              <div>
+                <p class="eyebrow">GROUP SETTINGS</p>
+                <h3>360-day challenge</h3>
+                <p class="muted">This is an optional calendar window for the group journal, not a flight quota or streak.</p>
+              </div>
+              <span id="admin-challenge-status" class="challenge-status">Not started</span>
+            </div>
+            <p id="admin-challenge-detail" class="muted">The challenge has not started.</p>
+            <div class="admin-challenge-actions">
+              <label class="field admin-date-field">
+                <span>Challenge start date</span>
+                <input id="admin-challenge-start-date" type="date">
+              </label>
+              <div class="admin-action-buttons">
+                <button id="admin-start-challenge-button" class="button button-primary" type="button">Start 360-day window</button>
+                <button id="admin-end-challenge-button" class="button button-quiet danger-button" type="button" hidden>End challenge</button>
+              </div>
+            </div>
+            <p id="admin-challenge-message" class="form-message" role="status" aria-live="polite"></p>
+          </section>
+
+          <div class="admin-management-grid">
+            <section class="panel admin-panel">
+              <div class="admin-panel-heading">
+                <div>
+                  <p class="eyebrow">MODERATION</p>
+                  <h3>Community posts</h3>
+                </div>
+                <span class="admin-count" id="admin-post-count">0</span>
+              </div>
+              <p class="muted">The latest 100 posts are listed. Deleting a post also removes its stored photo.</p>
+              <div id="admin-posts-list" class="admin-list">
+                <p class="muted">Loading posts…</p>
+              </div>
+            </section>
+
+            <section class="panel admin-panel">
+              <div class="admin-panel-heading">
+                <div>
+                  <p class="eyebrow">ACCOUNT ACCESS</p>
+                  <h3>Manage users</h3>
+                </div>
+                <span class="admin-count" id="admin-user-count">0</span>
+              </div>
+              <p class="muted">Kicking a user suspends their account and revokes their sessions. Their posts are kept. You can restore access later.</p>
+              <div id="admin-users-list" class="admin-list">
+                <p class="muted">Loading users…</p>
+              </div>
+            </section>
+          </div>
+          <p id="admin-message" class="form-message" role="status" aria-live="polite"></p>
         </section>
       </section>
     </main>
