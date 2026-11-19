@@ -462,14 +462,14 @@ async function handleAdminOverview(env) {
     env.DB.prepare(
       "SELECT p.id, p.flight_date, p.spot, p.other_spot AS otherSpot, p.description, p.created_at, u.username " +
       "FROM flight_posts p JOIN users u ON u.id = p.user_id " +
-      "ORDER BY p.created_at DESC, p.id DESC LIMIT 100"
+      "ORDER BY p.created_at DESC, p.id DESC"
     ).all(),
     env.DB.prepare(
       "SELECT u.id, u.username, u.created_at, " +
       "CASE WHEN m.user_id IS NULL THEN 0 ELSE 1 END AS is_suspended, " +
       "(SELECT COUNT(*) FROM flight_posts p WHERE p.user_id = u.id) AS post_count " +
       "FROM users u LEFT JOIN user_moderation m ON m.user_id = u.id " +
-      "ORDER BY u.created_at ASC LIMIT 200"
+      "ORDER BY u.created_at ASC"
     ).all()
   ]);
 
