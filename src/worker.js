@@ -187,18 +187,6 @@ async function createSessionResponse(db, user) {
 async function handleRegister(request, env) {
   let stage = "rate-limit check";
   try {
-    const limit = await consumeRateLimit(
-      env.DB,
-      await requestRateKey(request, "register"),
-      5,
-      60 * 60 * 1000
-    );
-    if (!limit.allowed) {
-      return errorResponse("Too many registration attempts. Please try again later.", 429, {
-        "Retry-After": String(limit.retryAfter)
-      });
-    }
-
     stage = "read registration details";
     const body = await readJson(request);
     const username = typeof body.username === "string" ? body.username.trim() : "";
