@@ -85,6 +85,7 @@ function setAuthMode(mode) {
 }
 
 function showSignedOut() {
+  stopFeedPolling();
   currentUser = null;
   $("#auth-section").hidden = false;
   $("#app-section").hidden = true;
@@ -260,7 +261,11 @@ function stopFeedPolling() {
 }
 
 async function checkForNewPosts() {
-  if (feedState.loading || !feedState.posts.length || $("#feed-view").hidden) return;
+  if (feedState.loading || $("#feed-view").hidden) return;
+  if (!feedState.posts.length) {
+    await loadFeed(false);
+    return;
+  }
   let newest = feedState.posts[feedState.posts.length - 1];
   let after = { createdAt: newest.createdAt, id: newest.id };
   const incoming = [];
@@ -313,6 +318,7 @@ function switchView(view) {
 
   if (isFeed) {
     startFeedPolling();
+    $("#new-posts-bar").hidden = true;
     if (!feedState.posts.length) loadFeed(false);
     else requestAnimationFrame(function () {
       $("#feed-scroller").scrollTop = $("#feed-scroller").scrollHeight;
