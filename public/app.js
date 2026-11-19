@@ -257,7 +257,9 @@ async function loadChallengeBanner() {
     } else if (challenge.status === "active") {
       detail = "Current window: " + start + " through " + end + ". Participation is optional.";
     } else if (challenge.status === "ended") {
-      detail = end ? "The challenge window ended on " + end + "." : "The challenge window has ended.";
+      detail = challenge.endedAt
+        ? "The challenge window was ended on " + formatDate(challenge.endedAt) + "."
+        : (end ? "The challenge window ended on " + end + "." : "The challenge window has ended.");
     }
     $("#challenge-banner-title").textContent = "Optional 360-day challenge";
     $("#challenge-banner-detail").textContent = detail;
@@ -283,7 +285,10 @@ function renderAdminOverview(data) {
   } else if (challenge.status === "active") {
     detail = "The window runs from " + start + " through " + end + ". It is an optional journal period, not a requirement to fly.";
   } else if (challenge.status === "ended") {
-    detail = end ? "The previous window ended on " + end + ". You can start a new 360-day window." : "The previous challenge window has ended. You can start a new one.";
+    const ended = challenge.endedAt ? formatDate(challenge.endedAt) : end;
+    detail = ended
+      ? "The previous window ended on " + ended + ". You can start a new 360-day window."
+      : "The previous challenge window has ended. You can start a new one.";
   }
   $("#admin-challenge-status").textContent = labels[challenge.status] || "Not started";
   $("#admin-challenge-status").dataset.status = challenge.status || "not_started";
