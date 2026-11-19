@@ -495,17 +495,18 @@ async function handleFeed(request, env, user) {
     sql += " AND (p.created_at < ? OR (p.created_at = ? AND p.id < ?))";
     bindings.push(beforeCreatedAt, beforeCreatedAt, beforeId);
   }
+  const pageSize = isNewerQuery ? 30 : limit;
   sql += isNewerQuery
     ? " ORDER BY p.created_at ASC, p.id ASC LIMIT ?"
     : " ORDER BY p.created_at DESC, p.id DESC LIMIT ?";
-  bindings.push(limit + 1);
+  bindings.push(pageSize + 1);
 
   let statement = env.DB.prepare(sql);
   if (bindings.length) statement = statement.bind.apply(statement, bindings);
   const result = await statement.all();
   const rows = result.results || [];
-  const hasMore = !isNewerQuery && rows.length > limit;
-  const page = rows.slice(0, limit);
+  const hasMore = rows.length > pageSize;
+  const page = rows.slice(0, pageSize);
   const cursorRow = page.length ? page[page.length - 1] : null;
 
   return json({
