@@ -326,16 +326,23 @@ main { min-height: calc(100vh - 140px); padding: 40px 0 64px; }
 .topbar-plane-image {
   position: absolute;
   z-index: 1;
-  top: -25px;
-  right: 112px;
-  width: 310px;
-  height: 139px;
-  object-fit: cover;
+  top: -34px;
+  right: 108px;
+  width: 440px;
+  height: 184px;
+  object-fit: contain;
   object-position: center;
-  opacity: .88;
+  opacity: .84;
   pointer-events: none;
-  -webkit-mask-image: radial-gradient(ellipse 78% 76% at 62% 49%, #000 34%, rgba(0,0,0,.86) 55%, rgba(0,0,0,.32) 77%, transparent 100%);
-  mask-image: radial-gradient(ellipse 78% 76% at 62% 49%, #000 34%, rgba(0,0,0,.86) 55%, rgba(0,0,0,.32) 77%, transparent 100%);
+  /* Intersect two feathered masks so all four edges dissolve into the page. */
+  -webkit-mask-image:
+    linear-gradient(to right, transparent 0%, #000 18%, #000 82%, transparent 100%),
+    linear-gradient(to bottom, transparent 0%, #000 19%, #000 76%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent 0%, #000 18%, #000 82%, transparent 100%),
+    linear-gradient(to bottom, transparent 0%, #000 19%, #000 76%, transparent 100%);
+  mask-composite: intersect;
 }
 .theme-toggle {
   display: inline-flex;
@@ -481,17 +488,23 @@ html[data-theme="dark"] .form-message.success { color: #81cba1; }
 html[data-theme="dark"] .toast { background: #263b49; color: #f0f5f8; }
 
 @media (max-width: 720px) {
-  .topbar { min-height: 86px; }
+  .topbar { min-height: 94px; }
   .topbar-plane-image {
-    top: -3px;
-    right: 45px;
-    width: 190px;
-    height: 85px;
-    opacity: .55;
+    top: -20px;
+    right: 68px;
+    width: 300px;
+    height: 132px;
+    opacity: .76;
   }
   .theme-toggle { margin-left: 7px; padding: 0 9px; }
   .theme-toggle span:last-child { display: none; }
 }
 @media (max-width: 390px) {
-  .topbar-plane-image { right: 35px; width: 150px; height: 67px; opacity: .42; }
+  .topbar-plane-image {
+    top: -10px;
+    right: 54px;
+    width: 210px;
+    height: 105px;
+    opacity: .62;
+  }
 }
