@@ -41,16 +41,11 @@ In the Cloudflare dashboard, open **Flyers → Settings → Build** (or **Builds
 
 Do not configure this repository as a Pages static-site build. It is a Worker with static assets and an API. Wrangler is configured in \`wrangler.jsonc\` and serves browser files from \`public/\`.
 
-### Configure the administrator
+### Administrator access
 
-1. Create the account that will be the administrator, or choose an existing account. Confirm the username and make sure the account can sign in.
-2. In Cloudflare, open **Workers & Pages → Flyers → Settings → Variables and Secrets**.
-3. Add a plain-text variable named **ADMIN_USERNAME** with the exact username of that account. The comparison is case-insensitive.
-4. Save the variable and redeploy the Worker. Sign in again or refresh the app; only that account will see the Admin tab.
+Any signed-in account whose username contains `Dane), in any capitalization, receives administrator access. For example, `Dane`, `dane_harp`, and `RCPlaneDane23` all match. These accounts can delete posts, suspend or restore users, and manage the optional 360-day challenge.
 
-Keep this variable set to exactly one username. Do not put administrator passwords, tokens, or other secrets in GitHub. Without ADMIN_USERNAME, nobody is granted administrator access. The administrator account cannot be kicked or suspended by the dashboard.
-
-The administrator can delete individual posts, kick users (which suspends the account and revokes all sessions while keeping existing posts), restore suspended accounts, and start/end the optional 360-day challenge window. The challenge covers 360 calendar days including its start date and can be restarted after it ends. It is an optional journal window only; it does not impose flying quotas or streaks.
+**Important:** this is a username-based rule, not a private invitation. Anyone who can register a matching username can obtain administrator access. Multiple matching accounts are all administrators and cannot be kicked or suspended from the dashboard. For a real group app, a single explicit administrator account or a server-side allowlist is much safer. No `ADMIN_USERNAME` Cloudflare variable is required by this rule.
 
 ### Deploy
 
