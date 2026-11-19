@@ -320,9 +320,12 @@ function switchView(view) {
     startFeedPolling();
     $("#new-posts-bar").hidden = true;
     if (!feedState.posts.length) loadFeed(false);
-    else requestAnimationFrame(function () {
-      $("#feed-scroller").scrollTop = $("#feed-scroller").scrollHeight;
-    });
+    else {
+      requestAnimationFrame(function () {
+        $("#feed-scroller").scrollTop = $("#feed-scroller").scrollHeight;
+      });
+      checkForNewPosts();
+    }
   } else {
     stopFeedPolling();
   }
