@@ -156,7 +156,7 @@ function renderPost(post) {
   return '<article class="post-card" data-post-id="' + escapeHtml(post.id) + '">' +
     '<header class="post-header">' +
       '<div class="post-author">' +
-        '<span class="avatar" aria-hidden="true">' + escapeHtml(initial) + "</span>" +
+        avatarMarkup(post.avatarBase64 || "", post.username, "avatar") +
         '<div class="post-author-copy"><strong>' + escapeHtml(post.username) + '</strong>' +
         '<small>Flight date: ' + escapeHtml(formatDate(post.flightDate)) + "</small></div>" +
       "</div>" +
