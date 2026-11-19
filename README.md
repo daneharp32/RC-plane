@@ -12,6 +12,9 @@ A private, group-based RC-plane flight journal built for Cloudflare Workers and 
 - Flight-post composer with flying spot, one or more aircraft, completed flight date, required plane photo (including mobile camera-roll selection), and optional description.
 - Community feed visible to signed-in users, with newest posts at the bottom and older posts loaded when scrolling upward.
 - Personal flight-log view with totals and aircraft suggestions.
+- One administrator account selected using the Worker ADMIN_USERNAME variable.
+- Administrator-only post deletion, account suspension/restoration, and challenge start/end controls.
+- An optional 360-day calendar window; the app does not require flight frequency, create streaks, or rank participation.
 - Owner-specific account data and server-side validation.
 
 The five built-in flying spots are Chill Guy, Unc Road, Sports Park, Shore Cliffs, and Other. Selecting Other requires a general place description. Please do not enter home or school addresses or other private location details.
@@ -38,6 +41,17 @@ In the Cloudflare dashboard, open **Flyers → Settings → Build** (or **Builds
 
 Do not configure this repository as a Pages static-site build. It is a Worker with static assets and an API. Wrangler is configured in \`wrangler.jsonc\` and serves browser files from \`public/\`.
 
+### Configure the administrator
+
+1. Create the account that will be the administrator, or choose an existing account. Confirm the username and make sure the account can sign in.
+2. In Cloudflare, open **Workers & Pages → Flyers → Settings → Variables and Secrets**.
+3. Add a plain-text variable named **ADMIN_USERNAME** with the exact username of that account. The comparison is case-insensitive.
+4. Save the variable and redeploy the Worker. Sign in again or refresh the app; only that account will see the Admin tab.
+
+Keep this variable set to exactly one username. Do not put administrator passwords, tokens, or other secrets in GitHub. Without ADMIN_USERNAME, nobody is granted administrator access. The administrator account cannot be kicked or suspended by the dashboard.
+
+The administrator can delete individual posts, kick users (which suspends the account and revokes all sessions while keeping existing posts), restore suspended accounts, and start/end the optional 360-day challenge window. The challenge covers 360 calendar days including its start date and can be restarted after it ends. It is an optional journal window only; it does not impose flying quotas or streaks.
+
 ### Deploy
 
 Push to GitHub. Your connected Cloudflare Worker should start a new deployment. When it succeeds, open the Worker URL.
@@ -58,14 +72,19 @@ The local D1 database is separate from the remote production database.
 
 ## API overview
 
-- POST \`/api/auth/register\`
-- POST \`/api/auth/login\`
-- POST \`/api/auth/logout\`
-- GET \`/api/me\`
-- GET \`/api/dashboard\`
-- POST \`/api/posts\`
-- GET \`/api/feed\`
-- GET \`/api/health\`
+- POST /api/auth/register
+- POST /api/auth/login
+- POST /api/auth/logout
+- GET /api/me
+- GET /api/dashboard
+- POST /api/posts
+- GET /api/feed
+- GET /api/challenge
+- GET /api/admin/overview (administrator only)
+- POST /api/admin/challenge/start and /api/admin/challenge/end (administrator only)
+- DELETE /api/admin/posts/:id (administrator only)
+- POST /api/admin/users/:id/suspend and /api/admin/users/:id/restore (administrator only)
+- GET /api/health
 
 ## Security notes
 
