@@ -21,7 +21,7 @@ A private, group-based RC-plane flight journal built for Cloudflare Workers and 
 
 The five built-in flying spots are Chill Guy, Unc Road, Sports Park, Shore Cliffs, and Other. Selecting Other requires a general place description. Please do not enter home or school addresses or other private location details.
 
-Photos can be selected from a phone's camera roll or file picker. The browser attempts to decode the selected image, then repeatedly resizes and compresses it to JPEG before upload. The compressed photo is capped at about 315 KB so it fits safely within the current D1 post-row limit. R2 object storage can replace this approach later if the group needs larger images or a larger archive.
+Photos can be selected from a phone's camera roll or file picker. Flight-log photos are resized to about 315 KB, profile pictures to about 110 KB, and Hangar aircraft photos to about 130 KB before being stored as JPEG data in D1. Each account can list up to 30 Hangar aircraft. R2 object storage can replace this approach later if the group needs larger images or a larger archive.
 
 Photo uploads are mandatory for posts. Upload a photo of the RC aircraft from the completed session, and avoid photos showing other people's faces, vehicle plates, or private information. The journal is for recording flights that have already happened; it does not set flying quotas or streak goals. Follow local field rules and suitable conditions.
 
