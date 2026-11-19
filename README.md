@@ -9,14 +9,14 @@ A private, group-based RC-plane flight journal built for Cloudflare Workers and 
 - Hashed, HTTP-only, Secure, SameSite session cookies.
 - Server-side authorization and same-origin checks for write requests.
 - Login rate limiting.
-- Flight-post composer with flying spot, one or more aircraft, completed flight date, required plane photo, and optional description.
+- Flight-post composer with flying spot, one or more aircraft, completed flight date, required plane photo (including mobile camera-roll selection), and optional description.
 - Community feed visible to signed-in users, with newest posts at the bottom and older posts loaded when scrolling upward.
 - Personal flight-log view with totals and aircraft suggestions.
 - Owner-specific account data and server-side validation.
 
 The five built-in flying spots are Chill Guy, Unc Road, Sports Park, Shore Cliffs, and Other. Selecting Other requires a general place description. Please do not enter home or school addresses or other private location details.
 
-Photo files are resized in the browser to JPEG before upload and are stored with the post in D1 for this starter version. The maximum compressed image size is about 320 KB. R2 object storage can replace this approach later if the group needs larger images or a larger archive.
+Photos can be selected from a phone's camera roll or file picker. The browser attempts to decode the selected image, then repeatedly resizes and compresses it to JPEG before upload. The compressed photo is capped at about 315 KB so it fits safely within the current D1 post-row limit. R2 object storage can replace this approach later if the group needs larger images or a larger archive.
 
 Photo uploads are mandatory for posts. Upload a photo of the RC aircraft from the completed session, and avoid photos showing other people's faces, vehicle plates, or private information. The journal is for recording flights that have already happened; it does not set flying quotas or streak goals. Follow local field rules and suitable conditions.
 
