@@ -460,7 +460,7 @@ async function handleAdminOverview(env) {
   const [challenge, posts, users] = await Promise.all([
     readChallengeState(env.DB),
     env.DB.prepare(
-      "SELECT p.id, p.flight_date, p.spot, p.other_spot, p.description, p.created_at, u.username " +
+      "SELECT p.id, p.flight_date, p.spot, p.other_spot AS otherSpot, p.description, p.created_at, u.username " +
       "FROM flight_posts p JOIN users u ON u.id = p.user_id " +
       "ORDER BY p.created_at DESC, p.id DESC LIMIT 100"
     ).all(),
