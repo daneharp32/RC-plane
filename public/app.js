@@ -90,6 +90,8 @@ function showSignedOut() {
   $("#auth-section").hidden = false;
   $("#app-section").hidden = true;
   $("#account-area").hidden = true;
+  $("#admin-tab").hidden = true;
+  $("#challenge-banner").hidden = true;
   $("#auth-form").reset();
   setAuthMode("login");
 }
@@ -101,6 +103,7 @@ function showSignedIn(user) {
   $("#account-area").hidden = false;
   $("#account-name").textContent = user.username;
   $("#welcome-name").textContent = user.username;
+  $("#admin-tab").hidden = !user.isAdmin;
 }
 
 function formatDate(value) {
@@ -241,6 +244,108 @@ async function loadMyLogs() {
   }
 }
 
+
+async function loadChallengeBanner() {
+  try {
+    const result = await api("/api/challenge");
+    const challenge = result.challenge || { status: "not_started" };
+    const start = challenge.startDate ? formatDate(challenge.startDate) : "";
+    const end = challenge.endDate ? formatDate(challenge.endDate) : "";
+    let detail = "The optional 360-day challenge window has not started.";
+    if (challenge.status === "scheduled") {
+      detail = "Scheduled for " + start + " through " + end + ". Participation is optional.";
+    } else if (challenge.status === "active") {
+      detail = "Current window: " + start + " through " + end + ". Participation is optional.";
+    } else if (challenge.status === "ended") {
+      detail = end ? "The challenge window ended on " + end + "." : "The challenge window has ended.";
+    }
+    $("#challenge-banner-title").textContent = "Optional 360-day challenge";
+    $("#challenge-banner-detail").textContent = detail;
+    $("#challenge-banner").hidden = false;
+  } catch (_error) {
+    $("#challenge-banner").hidden = true;
+  }
+}
+
+function renderAdminOverview(data) {
+  const challenge = data.challenge || { status: "not_started" };
+  const labels = {
+    not_started: "Not started",
+    scheduled: "Scheduled",
+    active: "Active",
+    ended: "Ended"
+  };
+  const start = challenge.startDate ? formatDate(challenge.startDate) : "";
+  const end = challenge.endDate ? formatDate(challenge.endDate) : "";
+  let detail = "The challenge has not started. Choose a date to open the optional 360-day journal window.";
+  if (challenge.status === "scheduled") {
+    detail = "The window is scheduled from " + start + " through " + end + ". You can end it early if plans change.";
+  } else if (challenge.status === "active") {
+    detail = "The window runs from " + start + " through " + end + ". It is an optional journal period, not a requirement to fly.";
+  } else if (challenge.status === "ended") {
+    detail = end ? "The previous window ended on " + end + ". You can start a new 360-day window." : "The previous challenge window has ended. You can start a new one.";
+  }
+  $("#admin-challenge-status").textContent = labels[challenge.status] || "Not started";
+  $("#admin-challenge-status").dataset.status = challenge.status || "not_started";
+  $("#admin-challenge-detail").textContent = detail;
+  if (!$("#admin-challenge-start-date").value || challenge.startDate) {
+    $("#admin-challenge-start-date").value = challenge.startDate || localDate();
+  }
+  const underway = challenge.status === "active" || challenge.status === "scheduled";
+  $("#admin-start-challenge-button").hidden = underway;
+  $("#admin-start-challenge-button").textContent =
+    challenge.status === "ended" ? "Restart 360-day window" : "Start 360-day window";
+  $("#admin-end-challenge-button").hidden = !underway;
+
+  const posts = Array.isArray(data.posts) ? data.posts : [];
+  $("#admin-post-count").textContent = String(posts.length);
+  $("#admin-posts-list").innerHTML = posts.length
+    ? posts.map(function (post) {
+        const spot = spotLabel(post);
+        const description = post.description ? " · " + escapeHtml(post.description.slice(0, 90)) : "";
+        return '<div class="admin-list-row">' +
+          '<div class="admin-list-copy"><strong>' + escapeHtml(post.username) + ' · ' +
+          escapeHtml(spot) + '</strong><small>' + escapeHtml(formatDate(post.flight_date)) +
+          ' · ' + escapeHtml(formatTimestamp(post.created_at)) + description + '</small></div>' +
+          '<div class="admin-list-actions"><button class="button button-quiet danger-button" type="button" data-admin-delete-post="' +
+          escapeHtml(post.id) + '">Delete</button></div></div>';
+      }).join("")
+    : '<p class="muted">There are no community posts to manage.</p>';
+
+  const users = Array.isArray(data.users) ? data.users : [];
+  $("#admin-user-count").textContent = String(users.length);
+  $("#admin-users-list").innerHTML = users.length
+    ? users.map(function (user) {
+        let action = '<span class="admin-protected-label">Administrator · protected</span>';
+        if (!user.isAdmin) {
+          action = '<div class="admin-list-actions"><button class="button button-quiet ' +
+            (user.isSuspended ? "" : "danger-button") + '" type="button" data-admin-user-action="' +
+            (user.isSuspended ? "restore" : "suspend") + '" data-admin-user-id="' +
+            escapeHtml(user.id) + '" data-admin-user-name="' + escapeHtml(user.username) + '">' +
+            (user.isSuspended ? "Restore" : "Kick user") + '</button></div>';
+        }
+        const status = user.isAdmin ? "Administrator" : (user.isSuspended ? "Suspended" : "Active");
+        return '<div class="admin-list-row"><div class="admin-list-copy"><strong>' +
+          escapeHtml(user.username) + '</strong><small>' + escapeHtml(status) + ' · ' +
+          escapeHtml(String(user.postCount)) + ' posts · Joined ' +
+          escapeHtml(formatDate((user.createdAt || "").slice(0, 10))) +
+          '</small></div>' + action + '</div>';
+      }).join("")
+    : '<p class="muted">There are no accounts yet.</p>';
+}
+
+async function loadAdminPanel() {
+  if (!currentUser || !currentUser.isAdmin) return;
+  showMessage($("#admin-message"), "", false);
+  try {
+    const data = await api("/api/admin/overview");
+    renderAdminOverview(data);
+    await loadChallengeBanner();
+  } catch (error) {
+    showMessage($("#admin-message"), error.message, false);
+  }
+}
+
 function updatePlaneSuggestions(planes) {
   knownPlanes = Array.isArray(planes) ? planes : [];
   $("#plane-suggestions").innerHTML = knownPlanes
@@ -305,16 +410,21 @@ async function checkForNewPosts() {
 }
 
 function switchView(view) {
+  if (view === "admin" && (!currentUser || !currentUser.isAdmin)) view = "feed";
   const isFeed = view === "feed";
   const isMine = view === "mine";
   const isLog = view === "log";
+  const isAdminView = view === "admin";
   $("#feed-view").hidden = !isFeed;
   $("#my-logs-view").hidden = !isMine;
   $("#log-view").hidden = !isLog;
+  $("#admin-view").hidden = !isAdminView;
   $("#feed-tab").classList.toggle("active", isFeed);
   $("#my-logs-tab").classList.toggle("active", isMine);
+  $("#admin-tab").classList.toggle("active", isAdminView);
   $("#feed-tab").toggleAttribute("aria-current", isFeed);
   $("#my-logs-tab").toggleAttribute("aria-current", isMine);
+  $("#admin-tab").toggleAttribute("aria-current", isAdminView);
 
   if (isFeed) {
     startFeedPolling();
@@ -330,6 +440,7 @@ function switchView(view) {
     stopFeedPolling();
   }
   if (isMine) loadMyLogs();
+  if (isAdminView) loadAdminPanel();
   if (isLog) {
     $("#post-flight-date").value = localDate();
     showMessage($("#post-message"), "", false);
@@ -554,6 +665,7 @@ async function checkSession() {
     if (result.user) {
       showSignedIn(result.user);
       await refreshMyStats();
+      await loadChallengeBanner();
       switchView("feed");
     } else {
       showSignedOut();
@@ -596,6 +708,95 @@ $("#logout-button").addEventListener("click", async function () {
   clearPhoto();
   selectedPlanes = [];
   showSignedOut();
+});
+
+
+$("#admin-tab").addEventListener("click", function () { switchView("admin"); });
+
+$("#admin-start-challenge-button").addEventListener("click", async function () {
+  const startDate = $("#admin-challenge-start-date").value;
+  if (!startDate) {
+    showMessage($("#admin-challenge-message"), "Choose a start date first.", false);
+    return;
+  }
+  const label = $("#admin-challenge-status").textContent === "Ended" ? "restart" : "start";
+  if (!window.confirm("Are you sure you want to " + label + " the optional 360-day challenge window?")) return;
+  const button = $("#admin-start-challenge-button");
+  setBusy(button, true, "Saving…");
+  showMessage($("#admin-challenge-message"), "", false);
+  try {
+    await api("/api/admin/challenge/start", { method: "POST", body: { startDate: startDate } });
+    showMessage($("#admin-challenge-message"), "The 360-day window has been scheduled.", true);
+    await loadAdminPanel();
+    toast("Challenge window updated.");
+  } catch (error) {
+    showMessage($("#admin-challenge-message"), error.message, false);
+  } finally {
+    setBusy(button, false);
+  }
+});
+
+$("#admin-end-challenge-button").addEventListener("click", async function () {
+  if (!window.confirm("End the 360-day challenge window now? The group can still use the flight journal.")) return;
+  const button = $("#admin-end-challenge-button");
+  setBusy(button, true, "Ending…");
+  showMessage($("#admin-challenge-message"), "", false);
+  try {
+    await api("/api/admin/challenge/end", { method: "POST", body: {} });
+    showMessage($("#admin-challenge-message"), "The challenge window has ended.", true);
+    await loadAdminPanel();
+    toast("Challenge ended.");
+  } catch (error) {
+    showMessage($("#admin-challenge-message"), error.message, false);
+  } finally {
+    setBusy(button, false);
+  }
+});
+
+$("#admin-posts-list").addEventListener("click", async function (event) {
+  const button = event.target.closest("[data-admin-delete-post]");
+  if (!button) return;
+  const postId = button.getAttribute("data-admin-delete-post");
+  if (!window.confirm("Delete this post and its stored photo? This cannot be undone.")) return;
+  setBusy(button, true, "Deleting…");
+  try {
+    await api("/api/admin/posts/" + encodeURIComponent(postId), { method: "DELETE" });
+    feedState.posts = feedState.posts.filter(function (post) { return post.id !== postId; });
+    renderFeed();
+    if (!$("#my-logs-view").hidden) await loadMyLogs();
+    await loadAdminPanel();
+    toast("Post deleted.");
+  } catch (error) {
+    showMessage($("#admin-message"), error.message, false);
+    button.disabled = false;
+    button.textContent = "Delete";
+  }
+});
+
+$("#admin-users-list").addEventListener("click", async function (event) {
+  const button = event.target.closest("[data-admin-user-action]");
+  if (!button) return;
+  const action = button.getAttribute("data-admin-user-action");
+  const userId = button.getAttribute("data-admin-user-id");
+  const username = button.getAttribute("data-admin-user-name");
+  const suspending = action === "suspend";
+  const message = suspending
+    ? "Kick " + username + "? Their account will be suspended and all active sessions revoked. Their existing posts will remain."
+    : "Restore access for " + username + "?";
+  if (!window.confirm(message)) return;
+  setBusy(button, true, suspending ? "Suspending…" : "Restoring…");
+  try {
+    await api("/api/admin/users/" + encodeURIComponent(userId) + "/" + action, {
+      method: "POST",
+      body: {}
+    });
+    await loadAdminPanel();
+    toast(suspending ? username + " was suspended." : username + " was restored.");
+  } catch (error) {
+    showMessage($("#admin-message"), error.message, false);
+    button.disabled = false;
+    button.textContent = suspending ? "Kick user" : "Restore";
+  }
 });
 
 $("#feed-tab").addEventListener("click", function () { switchView("feed"); });
