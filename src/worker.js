@@ -427,6 +427,181 @@ async function ensureAdminSchema(db) {
   adminSchemaReady = true;
 }
 
+let profileHangarSchemaReady = false;
+
+async function ensureProfileHangarSchema(db) {
+  if (profileHangarSchemaReady) return;
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS user_profiles (" +
+    "user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, " +
+    "avatar_base64 TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL)"
+  ).run();
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS hangar_planes (" +
+    "id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, " +
+    "name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', " +
+    "photo_base64 TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
+  ).run();
+  await db.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_hangar_user_created ON hangar_planes(user_id, created_at DESC)"
+  ).run();
+  profileHangarSchemaReady = true;
+}
+
+function validBase64Image(value, maxLength, optional) {
+  if (typeof value !== "string") return false;
+  if (optional && value === "") return true;
+  return value.length >= 100 && value.length <= maxLength &&
+    /^[A-Za-z0-9+/]+={0,2}$/.test(value);
+}
+
+async function handleGetSettings(env, user) {
+  const row = await env.DB.prepare(
+    "SELECT avatar_base64 FROM user_profiles WHERE user_id = ?"
+  ).bind(user.id).first();
+  return json({
+    user: { id: user.id, username: user.username, isAdmin: isAdminUser(env, user) },
+    avatarBase64: row && row.avatar_base64 ? row.avatar_base64 : ""
+  });
+}
+
+async function handleUpdateSettings(request, env, user) {
+  const body = await readJson(request, 220000);
+  const newUsername = typeof body.username === "string" ? body.username.trim() : user.username;
+  const hasAvatar = Object.prototype.hasOwnProperty.call(body, "avatarBase64");
+  const avatarBase64 = hasAvatar ? body.avatarBase64 : null;
+
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(newUsername)) {
+    return errorResponse("Usernames must be 3–20 characters and use only letters, numbers, or underscores.");
+  }
+  if (hasAvatar && !validBase64Image(avatarBase64, 150000, true)) {
+    return errorResponse("Please choose a smaller profile picture (maximum about 110 KB after compression).");
+  }
+
+  if (newUsername.toLowerCase() !== user.username.toLowerCase()) {
+    try {
+      await env.DB.prepare("UPDATE users SET username = ? WHERE id = ?")
+        .bind(newUsername, user.id).run();
+    } catch (error) {
+      const message = error && error.message ? error.message.toLowerCase() : "";
+      if (message.includes("unique") || message.includes("constraint")) {
+        return errorResponse("That username is already taken. Please choose another.", 409);
+      }
+      throw error;
+    }
+  }
+
+  if (hasAvatar) {
+    await env.DB.prepare(
+      "INSERT INTO user_profiles (user_id, avatar_base64, updated_at) VALUES (?, ?, ?) " +
+      "ON CONFLICT(user_id) DO UPDATE SET avatar_base64 = excluded.avatar_base64, updated_at = excluded.updated_at"
+    ).bind(user.id, avatarBase64, new Date().toISOString()).run();
+  } else {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO user_profiles (user_id, avatar_base64, updated_at) VALUES (?, '', ?)"
+    ).bind(user.id, new Date().toISOString()).run();
+  }
+
+  return await handleGetSettings(env, { id: user.id, username: newUsername });
+}
+
+async function handleParticipants(env) {
+  const result = await env.DB.prepare(
+    "SELECT u.id, u.username, up.avatar_base64, " +
+    "(SELECT COUNT(DISTINCT CAST((julianday(p.flight_date) - julianday(cs.start_date)) / 7 AS INTEGER) " +
+    "FROM flight_posts p WHERE p.user_id = u.id AND cs.start_date IS NOT NULL " +
+    "AND p.flight_date >= cs.start_date AND (cs.end_date IS NULL OR p.flight_date <= cs.end_date)) AS weeks_completed " +
+    "FROM users u LEFT JOIN user_profiles up ON up.user_id = u.id " +
+    "LEFT JOIN challenge_settings cs ON cs.id = 1 " +
+    "LEFT JOIN user_moderation m ON m.user_id = u.id " +
+    "WHERE m.user_id IS NULL ORDER BY u.username COLLATE NOCASE"
+  ).all();
+
+  const participants = result.results || [];
+  const hangarRows = await env.DB.prepare(
+    "SELECT h.user_id, h.name FROM hangar_planes h " +
+    "JOIN users u ON u.id = h.user_id " +
+    "LEFT JOIN user_moderation m ON m.user_id = u.id " +
+    "WHERE m.user_id IS NULL ORDER BY h.name COLLATE NOCASE"
+  ).all();
+  const planeMap = new Map();
+  for (const row of hangarRows.results || []) {
+    if (!planeMap.has(row.user_id)) planeMap.set(row.user_id, []);
+    planeMap.get(row.user_id).push(row.name);
+  }
+
+  return json({
+    participants: participants.map(function (row) {
+      return {
+        id: row.id,
+        username: row.username,
+        avatarBase64: row.avatar_base64 || "",
+        weeksCompleted: row.weeks_completed || 0,
+        planes: planeMap.get(row.id) || []
+      };
+    })
+  });
+}
+
+async function handleGetHangar(env, user, targetUserId) {
+  const targetId = targetUserId || user.id;
+  const target = await env.DB.prepare(
+    "SELECT u.id, u.username, up.avatar_base64 FROM users u " +
+    "LEFT JOIN user_profiles up ON up.user_id = u.id " +
+    "LEFT JOIN user_moderation m ON m.user_id = u.id " +
+    "WHERE u.id = ? AND m.user_id IS NULL"
+  ).bind(targetId).first();
+  if (!target) return errorResponse("That participant could not be found.", 404);
+  const result = await env.DB.prepare(
+    "SELECT id, name, description, photo_base64, created_at, updated_at " +
+    "FROM hangar_planes WHERE user_id = ? ORDER BY created_at DESC"
+  ).bind(targetId).all();
+  return json({
+    owner: { id: target.id, username: target.username, avatarBase64: target.avatar_base64 || "" },
+    isMine: target.id === user.id,
+    planes: result.results || []
+  });
+}
+
+async function handleCreateHangarPlane(request, env, user) {
+  const body = await readJson(request, 210000);
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const description = typeof body.description === "string" ? body.description.trim() : "";
+  const photoBase64 = typeof body.photoBase64 === "string" ? body.photoBase64 : "";
+  if (name.length < 2 || name.length > 60) {
+    return errorResponse("Plane names must be between 2 and 60 characters.");
+  }
+  if (description.length > 300) return errorResponse("Plane details must be 300 characters or fewer.");
+  if (!validBase64Image(photoBase64, 180000, true)) {
+    return errorResponse("Please choose a smaller aircraft photo (maximum about 130 KB after compression).");
+  }
+  const count = await env.DB.prepare(
+    "SELECT COUNT(*) AS total FROM hangar_planes WHERE user_id = ?"
+  ).bind(user.id).first();
+  if (count && count.total >= 30) return errorResponse("Your Hangar can hold up to 30 aircraft entries.", 409);
+
+  const duplicate = await env.DB.prepare(
+    "SELECT id FROM hangar_planes WHERE user_id = ? AND name = ? COLLATE NOCASE"
+  ).bind(user.id, name).first();
+  if (duplicate) return errorResponse("That aircraft is already in your Hangar.", 409);
+
+  const id = randomId();
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO hangar_planes (id, user_id, name, description, photo_base64, created_at, updated_at) " +
+    "VALUES (?, ?, ?, ?, ?, ?, ?)"
+  ).bind(id, user.id, name, description, photoBase64, now, now).run();
+  return json({ ok: true, id: id }, 201);
+}
+
+async function handleDeleteHangarPlane(env, user, planeId) {
+  const result = await env.DB.prepare(
+    "DELETE FROM hangar_planes WHERE id = ? AND user_id = ?"
+  ).bind(planeId, user.id).run();
+  if (!result.meta || result.meta.changes < 1) return errorResponse("Aircraft not found in your Hangar.", 404);
+  return json({ ok: true });
+}
+
 function challengePublicState(row) {
   const today = localToday();
   let status = row ? row.status : "not_started";
@@ -690,6 +865,7 @@ async function routeApi(request, env) {
   // Provision the social feed and admin tables automatically for existing D1 databases.
   await ensureFlightPostsSchema(env.DB);
   await ensureAdminSchema(env.DB);
+  await ensureProfileHangarSchema(env.DB);
 
   if (method === "GET" && path === "/api/health") {
     try {
@@ -740,6 +916,46 @@ async function routeApi(request, env) {
     return json({
       user: user ? { id: user.id, username: user.username, isAdmin: isAdminUser(env, user) } : null
     });
+  }
+
+  if (method === "GET" && path === "/api/settings") {
+    const auth = await requireUser(request, env.DB);
+    if (auth.response) return auth.response;
+    return handleGetSettings(env, auth.user);
+  }
+
+  if (method === "POST" && path === "/api/settings") {
+    const auth = await requireUser(request, env.DB);
+    if (auth.response) return auth.response;
+    return handleUpdateSettings(request, env, auth.user);
+  }
+
+  if (method === "GET" && path === "/api/participants") {
+    const auth = await requireUser(request, env.DB);
+    if (auth.response) return auth.response;
+    return handleParticipants(env);
+  }
+
+  if (method === "GET" && path === "/api/hangar") {
+    const auth = await requireUser(request, env.DB);
+    if (auth.response) return auth.response;
+    const targetUserId = new URL(request.url).searchParams.get("userId") || auth.user.id;
+    if (!/^[A-Za-z0-9_-]{10,40}$/.test(targetUserId)) return errorResponse("Invalid participant ID.");
+    return handleGetHangar(env, auth.user, targetUserId);
+  }
+
+  if (method === "POST" && path === "/api/hangar") {
+    const auth = await requireUser(request, env.DB);
+    if (auth.response) return auth.response;
+    return handleCreateHangarPlane(request, env, auth.user);
+  }
+
+  if (method === "DELETE" && path.indexOf("/api/hangar/") === 0) {
+    const auth = await requireUser(request, env.DB);
+    if (auth.response) return auth.response;
+    const planeId = path.slice("/api/hangar/".length);
+    if (!/^[A-Za-z0-9_-]{10,40}$/.test(planeId)) return errorResponse("Invalid aircraft ID.");
+    return handleDeleteHangarPlane(env, auth.user, planeId);
   }
 
   if (method === "GET" && path === "/api/challenge") {
