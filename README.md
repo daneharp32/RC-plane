@@ -29,7 +29,7 @@ Password recovery is not included yet. Because accounts do not use email address
 
 The repository is configured for the existing Worker named \`flyers\`. The D1 binding is named \`DB\`, and it points to the database \`rc-plane-tracker\`.
 
-The Worker creates the \`flight_posts\` table and its indexes automatically the first time the updated API is used. It also includes the repeatable SQL in \`migrations/0002_flight_posts.sql\` for reference and future migration-based setup. No manual database-console step should be needed for this new table.
+The Worker automatically creates the flight_posts, user_moderation, and challenge_settings tables and their indexes when the API is first used. Repeatable SQL is included in migrations/0002_flight_posts.sql and migrations/0003_admin_challenge.sql. No manual database-console step is needed for these tables.
 
 ### Worker build settings
 
