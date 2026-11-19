@@ -1,6 +1,7 @@
 const SESSION_COOKIE = "rcplane_session";
 const SESSION_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
-const PASSWORD_ITERATIONS = 600000;
+// Cloudflare Workers Web Crypto currently rejects PBKDF2 iteration counts above 100,000.
+const PASSWORD_ITERATIONS = 100000;
 const encoder = new TextEncoder();
 
 function json(data, status, extraHeaders) {
