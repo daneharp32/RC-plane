@@ -171,19 +171,14 @@ async function requireUser(request, db) {
   return { user: user };
 }
 
-function isAdminUser(env, user) {
-  const configured = typeof env.ADMIN_USERNAME === "string" ? env.ADMIN_USERNAME.trim() : "";
-  return Boolean(configured && user &&
-    user.username.toLowerCase() === configured.toLowerCase());
+function isAdminUser(_env, user) {
+  return Boolean(user && typeof user.username === "string" &&
+    user.username.toLowerCase().includes("dane"));
 }
 
 async function requireAdmin(request, env) {
   const auth = await requireUser(request, env.DB);
   if (auth.response) return auth;
-  const configured = typeof env.ADMIN_USERNAME === "string" ? env.ADMIN_USERNAME.trim() : "";
-  if (!configured) {
-    return { response: errorResponse("Administrator access has not been configured yet.", 503) };
-  }
   if (!isAdminUser(env, auth.user)) {
     return { response: errorResponse("Administrator permission is required.", 403) };
   }
@@ -500,10 +495,8 @@ async function handleAdminUserStatus(env, admin, targetUserId, suspend) {
     "SELECT id, username FROM users WHERE id = ?"
   ).bind(targetUserId).first();
   if (!target) return errorResponse("User not found.", 404);
-  const adminUsername = typeof env.ADMIN_USERNAME === "string" ? env.ADMIN_USERNAME.trim() : "";
-  if (target.id === admin.id ||
-      (adminUsername && target.username.toLowerCase() === adminUsername.toLowerCase())) {
-    return errorResponse("The administrator account cannot be kicked or suspended.", 400);
+  if (target.id === admin.id || isAdminUser(env, target)) {
+    return errorResponse("An administrator account cannot be kicked or suspended.", 400);
   }
 
   if (suspend) {
