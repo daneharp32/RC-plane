@@ -6,7 +6,7 @@ This first version is a personal journal rather than a weekly flying challenge. 
 
 ## Included
 
-- Username-and-password registration and sign-in (no email address required).
+- Username-and-password registration and sign-in (no email address required); passwords must be 6–128 characters.
 - PBKDF2-HMAC-SHA256 password hashing with a per-user random salt.
 - Hashed, HTTP-only, Secure, SameSite session cookies.
 - Server-side authorization and same-origin checks for write requests.
