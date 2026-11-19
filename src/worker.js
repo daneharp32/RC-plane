@@ -731,6 +731,7 @@ function publicPost(row) {
   return {
     id: row.id,
     username: row.username,
+    avatarBase64: row.avatar_base64 || "",
     flightDate: row.flight_date,
     spot: row.spot,
     otherSpot: row.other_spot,
@@ -815,8 +816,10 @@ async function handleFeed(request, env, user) {
 
   let sql =
     "SELECT p.id, p.flight_date, p.spot, p.other_spot, p.planes_json, " +
-    "p.description, p.photo_mime, p.photo_base64, p.created_at, u.username " +
-    "FROM flight_posts p JOIN users u ON u.id = p.user_id WHERE 1 = 1";
+    "p.description, p.photo_mime, p.photo_base64, p.created_at, u.username, " +
+    "COALESCE(up.avatar_base64, '') AS avatar_base64 " +
+    "FROM flight_posts p JOIN users u ON u.id = p.user_id " +
+    "LEFT JOIN user_profiles up ON up.user_id = u.id WHERE 1 = 1";
   const bindings = [];
   if (mineOnly) {
     sql += " AND p.user_id = ?";
