@@ -182,11 +182,11 @@
               <span>Upload photo <b class="required-mark">*</b></span>
               <label for="post-photo" class="photo-drop" id="photo-drop">
                 <span class="photo-icon">↑</span>
-                <strong id="photo-prompt">Choose a photo of your RC plane</strong>
-                <small>Photo required · JPEG, PNG, or WebP · up to 12 MB before compression</small>
+                <strong id="photo-prompt">Choose a photo from your camera roll</strong>
+                <small>Photo required · Select from Photos, Gallery, or your files · up to 25 MB before compression</small>
                 <span class="button button-quiet photo-choose-button">Choose photo</span>
               </label>
-              <input id="post-photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required hidden>
+              <input id="post-photo" type="file" accept="image/*" required hidden>
               <div id="photo-preview-wrap" class="photo-preview-wrap" hidden>
                 <img id="photo-preview" alt="Preview of the selected RC plane photo">
                 <div class="photo-preview-caption">
