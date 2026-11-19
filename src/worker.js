@@ -159,7 +159,8 @@ async function getSession(request, db) {
   const tokenHash = await sha256(token);
   const row = await db.prepare(
     "SELECT u.id, u.username FROM sessions s JOIN users u ON u.id = s.user_id " +
-    "WHERE s.token_hash = ? AND s.expires_at > ?"
+    "LEFT JOIN user_moderation m ON m.user_id = u.id " +
+    "WHERE s.token_hash = ? AND s.expires_at > ? AND m.user_id IS NULL"
   ).bind(tokenHash, new Date().toISOString()).first();
   return row ? { id: row.id, username: row.username } : null;
 }
@@ -168,6 +169,25 @@ async function requireUser(request, db) {
   const user = await getSession(request, db);
   if (!user) return { response: errorResponse("Please sign in to continue.", 401) };
   return { user: user };
+}
+
+function isAdminUser(env, user) {
+  const configured = typeof env.ADMIN_USERNAME === "string" ? env.ADMIN_USERNAME.trim() : "";
+  return Boolean(configured && user &&
+    user.username.toLowerCase() === configured.toLowerCase());
+}
+
+async function requireAdmin(request, env) {
+  const auth = await requireUser(request, env.DB);
+  if (auth.response) return auth;
+  const configured = typeof env.ADMIN_USERNAME === "string" ? env.ADMIN_USERNAME.trim() : "";
+  if (!configured) {
+    return { response: errorResponse("Administrator access has not been configured yet.", 503) };
+  }
+  if (!isAdminUser(env, auth.user)) {
+    return { response: errorResponse("Administrator permission is required.", 403) };
+  }
+  return auth;
 }
 
 async function createSessionResponse(db, user) {
@@ -245,12 +265,18 @@ async function handleLogin(request, env) {
   }
 
   const row = await env.DB.prepare(
-    "SELECT id, username, password_salt, password_hash FROM users WHERE username = ? COLLATE NOCASE"
+    "SELECT u.id, u.username, u.password_salt, u.password_hash, " +
+    "CASE WHEN m.user_id IS NULL THEN 0 ELSE 1 END AS is_suspended " +
+    "FROM users u LEFT JOIN user_moderation m ON m.user_id = u.id " +
+    "WHERE u.username = ? COLLATE NOCASE"
   ).bind(username).first();
   const salt = row ? fromBase64Url(row.password_salt) : new Uint8Array(16);
   const passwordHash = await hashPassword(password, salt);
   if (!row || !constantTimeEqual(passwordHash, row.password_hash)) {
     return errorResponse("Username or password is incorrect.", 401);
+  }
+  if (row.is_suspended) {
+    return errorResponse("This account has been suspended by an administrator.", 403);
   }
   return createSessionResponse(env.DB, { id: row.id, username: row.username });
 }
@@ -382,6 +408,148 @@ async function ensureFlightPostsSchema(db) {
     "CREATE INDEX IF NOT EXISTS idx_flight_posts_user_created ON flight_posts(user_id, created_at DESC, id DESC)"
   ).run();
   flightPostsSchemaReady = true;
+}
+
+let adminSchemaReady = false;
+
+async function ensureAdminSchema(db) {
+  if (adminSchemaReady) return;
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS user_moderation (" +
+    "user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, " +
+    "reason TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL)"
+  ).run();
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS challenge_settings (" +
+    "id INTEGER PRIMARY KEY CHECK(id = 1), " +
+    "status TEXT NOT NULL CHECK(status IN ('not_started','active','ended')), " +
+    "start_date TEXT, end_date TEXT, ended_at TEXT, updated_at TEXT NOT NULL, " +
+    "updated_by TEXT REFERENCES users(id))"
+  ).run();
+  await db.prepare(
+    "INSERT OR IGNORE INTO challenge_settings (id, status, updated_at) VALUES (1, 'not_started', ?)"
+  ).bind(new Date().toISOString()).run();
+  adminSchemaReady = true;
+}
+
+function challengePublicState(row) {
+  const today = localToday();
+  let status = row ? row.status : "not_started";
+  if (status === "active" && row.end_date && row.end_date < today) status = "ended";
+  else if (status === "active" && row.start_date && row.start_date > today) status = "scheduled";
+  return {
+    status: status,
+    startDate: row && row.start_date ? row.start_date : null,
+    endDate: row && row.end_date ? row.end_date : null,
+    endedAt: row && row.ended_at ? row.ended_at : null
+  };
+}
+
+async function readChallengeState(db) {
+  const row = await db.prepare(
+    "SELECT status, start_date, end_date, ended_at FROM challenge_settings WHERE id = 1"
+  ).first();
+  return challengePublicState(row);
+}
+
+async function handleChallengeStatus(env) {
+  return json({ challenge: await readChallengeState(env.DB) });
+}
+
+async function handleAdminOverview(env) {
+  const [challenge, posts, users] = await Promise.all([
+    readChallengeState(env.DB),
+    env.DB.prepare(
+      "SELECT p.id, p.flight_date, p.spot, p.other_spot, p.description, p.created_at, u.username " +
+      "FROM flight_posts p JOIN users u ON u.id = p.user_id " +
+      "ORDER BY p.created_at DESC, p.id DESC LIMIT 100"
+    ).all(),
+    env.DB.prepare(
+      "SELECT u.id, u.username, u.created_at, " +
+      "CASE WHEN m.user_id IS NULL THEN 0 ELSE 1 END AS is_suspended, " +
+      "(SELECT COUNT(*) FROM flight_posts p WHERE p.user_id = u.id) AS post_count " +
+      "FROM users u LEFT JOIN user_moderation m ON m.user_id = u.id " +
+      "ORDER BY u.created_at ASC LIMIT 200"
+    ).all()
+  ]);
+
+  return json({
+    challenge: challenge,
+    posts: posts.results || [],
+    users: (users.results || []).map(function (row) {
+      return {
+        id: row.id,
+        username: row.username,
+        createdAt: row.created_at,
+        isSuspended: Boolean(row.is_suspended),
+        postCount: row.post_count || 0,
+        isAdmin: isAdminUser(env, { username: row.username })
+      };
+    })
+  });
+}
+
+async function handleAdminDeletePost(env, postId) {
+  const result = await env.DB.prepare("DELETE FROM flight_posts WHERE id = ?").bind(postId).run();
+  if (!result.meta || result.meta.changes < 1) return errorResponse("Post not found.", 404);
+  return json({ ok: true });
+}
+
+async function handleAdminUserStatus(env, admin, targetUserId, suspend) {
+  const target = await env.DB.prepare(
+    "SELECT id, username FROM users WHERE id = ?"
+  ).bind(targetUserId).first();
+  if (!target) return errorResponse("User not found.", 404);
+  const adminUsername = typeof env.ADMIN_USERNAME === "string" ? env.ADMIN_USERNAME.trim() : "";
+  if (target.id === admin.id ||
+      (adminUsername && target.username.toLowerCase() === adminUsername.toLowerCase())) {
+    return errorResponse("The administrator account cannot be kicked or suspended.", 400);
+  }
+
+  if (suspend) {
+    await env.DB.prepare(
+      "INSERT INTO user_moderation (user_id, reason, updated_at) VALUES (?, ?, ?) " +
+      "ON CONFLICT(user_id) DO UPDATE SET reason = excluded.reason, updated_at = excluded.updated_at"
+    ).bind(target.id, "Suspended by administrator", new Date().toISOString()).run();
+    // Existing cookies are also blocked by getSession; delete their sessions immediately as well.
+    await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(target.id).run();
+  } else {
+    await env.DB.prepare("DELETE FROM user_moderation WHERE user_id = ?").bind(target.id).run();
+  }
+  return json({ ok: true, isSuspended: suspend });
+}
+
+async function handleAdminStartChallenge(request, env, admin) {
+  const body = await readJson(request);
+  const startDate = typeof body.startDate === "string" ? body.startDate : "";
+  if (!isValidDate(startDate) || startDate < localToday()) {
+    return errorResponse("Choose today or a future date for the challenge start.");
+  }
+
+  const current = await readChallengeState(env.DB);
+  if (current.status === "active" || current.status === "scheduled") {
+    return errorResponse("The 360-day challenge is already underway.", 409);
+  }
+
+  const end = new Date(startDate + "T00:00:00.000Z");
+  end.setUTCDate(end.getUTCDate() + 359);
+  const endDate = end.toISOString().slice(0, 10);
+  await env.DB.prepare(
+    "UPDATE challenge_settings SET status = 'active', start_date = ?, end_date = ?, ended_at = NULL, " +
+    "updated_at = ?, updated_by = ? WHERE id = 1"
+  ).bind(startDate, endDate, new Date().toISOString(), admin.id).run();
+  return json({ ok: true, challenge: await readChallengeState(env.DB) });
+}
+
+async function handleAdminEndChallenge(env, admin) {
+  const current = await readChallengeState(env.DB);
+  if (current.status !== "active" && current.status !== "scheduled") {
+    return errorResponse("There is no active challenge to end.", 409);
+  }
+  await env.DB.prepare(
+    "UPDATE challenge_settings SET status = 'ended', ended_at = ?, updated_at = ?, updated_by = ? WHERE id = 1"
+  ).bind(localToday(), new Date().toISOString(), admin.id).run();
+  return json({ ok: true, challenge: await readChallengeState(env.DB) });
 }
 
 function publicPost(row) {
@@ -526,13 +694,14 @@ async function routeApi(request, env) {
     return errorResponse("The D1 database is not connected yet. Follow the setup steps in the repository README.", 503);
   }
 
-  // Creates the social-feed table the first time the updated app is used.
+  // Provision the social feed and admin tables automatically for existing D1 databases.
   await ensureFlightPostsSchema(env.DB);
+  await ensureAdminSchema(env.DB);
 
   if (method === "GET" && path === "/api/health") {
     try {
       await env.DB.prepare("SELECT 1 AS ok").first();
-      const requiredTables = ["users", "sessions", "flights", "rate_limits", "flight_posts"];
+      const requiredTables = ["users", "sessions", "flights", "rate_limits", "flight_posts", "user_moderation", "challenge_settings"];
       const tableRows = await env.DB.prepare(
         "SELECT name FROM sqlite_master WHERE type = 'table'"
       ).all();
@@ -575,7 +744,48 @@ async function routeApi(request, env) {
 
   if (method === "GET" && path === "/api/me") {
     const user = await getSession(request, env.DB);
-    return json({ user: user ? { id: user.id, username: user.username } : null });
+    return json({
+      user: user ? { id: user.id, username: user.username, isAdmin: isAdminUser(env, user) } : null
+    });
+  }
+
+  if (method === "GET" && path === "/api/challenge") {
+    const auth = await requireUser(request, env.DB);
+    if (auth.response) return auth.response;
+    return handleChallengeStatus(env);
+  }
+
+  if (method === "GET" && path === "/api/admin/overview") {
+    const auth = await requireAdmin(request, env);
+    if (auth.response) return auth.response;
+    return handleAdminOverview(env);
+  }
+
+  if (method === "POST" && path === "/api/admin/challenge/start") {
+    const auth = await requireAdmin(request, env);
+    if (auth.response) return auth.response;
+    return handleAdminStartChallenge(request, env, auth.user);
+  }
+
+  if (method === "POST" && path === "/api/admin/challenge/end") {
+    const auth = await requireAdmin(request, env);
+    if (auth.response) return auth.response;
+    return handleAdminEndChallenge(env, auth.user);
+  }
+
+  if (method === "DELETE" && path.indexOf("/api/admin/posts/") === 0) {
+    const auth = await requireAdmin(request, env);
+    if (auth.response) return auth.response;
+    const postId = path.slice("/api/admin/posts/".length);
+    if (!/^[A-Za-z0-9_-]{10,40}$/.test(postId)) return errorResponse("Invalid post ID.");
+    return handleAdminDeletePost(env, postId);
+  }
+
+  const adminUserMatch = path.match(/^\/api\/admin\/users\/([A-Za-z0-9_-]{10,40})\/(suspend|restore)$/);
+  if (method === "POST" && adminUserMatch) {
+    const auth = await requireAdmin(request, env);
+    if (auth.response) return auth.response;
+    return handleAdminUserStatus(env, auth.user, adminUserMatch[1], adminUserMatch[2] === "suspend");
   }
 
   if (method === "GET" && path === "/api/feed") {
