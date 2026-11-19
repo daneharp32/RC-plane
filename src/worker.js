@@ -870,7 +870,7 @@ async function routeApi(request, env) {
   if (method === "GET" && path === "/api/health") {
     try {
       await env.DB.prepare("SELECT 1 AS ok").first();
-      const requiredTables = ["users", "sessions", "flights", "rate_limits", "flight_posts", "user_moderation", "challenge_settings"];
+      const requiredTables = ["users", "sessions", "flights", "rate_limits", "flight_posts", "user_moderation", "challenge_settings", "user_profiles", "hangar_planes"];
       const tableRows = await env.DB.prepare(
         "SELECT name FROM sqlite_master WHERE type = 'table'"
       ).all();
