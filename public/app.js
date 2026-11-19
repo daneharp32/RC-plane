@@ -13,6 +13,7 @@ let feedState = {
 };
 
 let toastTimer = null;
+let feedPollTimer = null;
 
 function escapeHtml(value) {
   return String(value === null || value === undefined ? "" : value)
@@ -246,6 +247,58 @@ function updatePlaneSuggestions(planes) {
     .join("");
 }
 
+function startFeedPolling() {
+  if (feedPollTimer) clearInterval(feedPollTimer);
+  feedPollTimer = setInterval(function () {
+    if (!$("#feed-view").hidden) checkForNewPosts();
+  }, 20000);
+}
+
+function stopFeedPolling() {
+  if (feedPollTimer) clearInterval(feedPollTimer);
+  feedPollTimer = null;
+}
+
+async function checkForNewPosts() {
+  if (feedState.loading || !feedState.posts.length || $("#feed-view").hidden) return;
+  let newest = feedState.posts[feedState.posts.length - 1];
+  let after = { createdAt: newest.createdAt, id: newest.id };
+  const incoming = [];
+  let pages = 0;
+
+  try {
+    while (pages < 4) {
+      const query = new URLSearchParams({
+        afterCreatedAt: after.createdAt,
+        afterId: after.id
+      });
+      const result = await api("/api/feed?" + query.toString());
+      if (!result.posts.length) break;
+      incoming.push.apply(incoming, result.posts);
+      if (!result.hasMore || !result.nextCursor) break;
+      after = result.nextCursor;
+      pages += 1;
+    }
+
+    if (!incoming.length) return;
+    const scroller = $("#feed-scroller");
+    const wasNearBottom = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop < 140;
+    feedState.posts = feedState.posts.concat(incoming);
+    renderFeed();
+    if (wasNearBottom) {
+      scroller.scrollTop = scroller.scrollHeight;
+      $("#new-posts-bar").hidden = true;
+    } else {
+      $("#new-posts-button").textContent = incoming.length === 1
+        ? "1 new post below ↓"
+        : incoming.length + " new posts below ↓";
+      $("#new-posts-bar").hidden = false;
+    }
+  } catch (_error) {
+    // Keep the current feed visible; the next poll will retry.
+  }
+}
+
 function switchView(view) {
   const isFeed = view === "feed";
   const isMine = view === "mine";
@@ -257,13 +310,17 @@ function switchView(view) {
   $("#my-logs-tab").classList.toggle("active", isMine);
   $("#feed-tab").toggleAttribute("aria-current", isFeed);
   $("#my-logs-tab").toggleAttribute("aria-current", isMine);
-  if (isMine) loadMyLogs();
+
   if (isFeed) {
+    startFeedPolling();
     if (!feedState.posts.length) loadFeed(false);
     else requestAnimationFrame(function () {
       $("#feed-scroller").scrollTop = $("#feed-scroller").scrollHeight;
     });
+  } else {
+    stopFeedPolling();
   }
+  if (isMine) loadMyLogs();
   if (isLog) {
     $("#post-flight-date").value = localDate();
     showMessage($("#post-message"), "", false);
@@ -405,7 +462,6 @@ async function checkSession() {
       showSignedIn(result.user);
       await refreshMyStats();
       switchView("feed");
-      await loadFeed(false);
     } else {
       showSignedOut();
     }
@@ -529,7 +585,6 @@ $("#post-form").addEventListener("submit", async function (event) {
     await refreshMyStats();
     feedState = { posts: [], hasMore: false, nextCursor: null, loading: false };
     switchView("feed");
-    await loadFeed(false);
     toast("Your flight log has been posted.");
   } catch (error) {
     showMessage($("#post-message"), error.message, false);
@@ -543,6 +598,13 @@ $("#feed-scroller").addEventListener("scroll", function () {
   if (this.scrollTop < 100 && feedState.hasMore && !feedState.loading) {
     loadFeed(true);
   }
+  if (this.scrollHeight - this.clientHeight - this.scrollTop < 80) {
+    $("#new-posts-bar").hidden = true;
+  }
+});
+$("#new-posts-button").addEventListener("click", function () {
+  $("#feed-scroller").scrollTop = $("#feed-scroller").scrollHeight;
+  $("#new-posts-bar").hidden = true;
 });
 
 $("#post-flight-date").value = localDate();
