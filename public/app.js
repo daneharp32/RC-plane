@@ -72,6 +72,29 @@ function setBusy(button, busy, busyText) {
     button.textContent = button.dataset.originalText || button.textContent;
   }
 }
+function applyTheme(theme, savePreference) {
+  const selected = theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = selected;
+  const isDark = selected === "dark";
+  $("#theme-toggle").setAttribute("aria-pressed", String(isDark));
+  $("#theme-toggle").setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
+  $("#theme-toggle-icon").textContent = isDark ? "☀" : "☾";
+  $("#theme-toggle-label").textContent = isDark ? "Light mode" : "Dark mode";
+  const themeColor = document.querySelector('meta[name="theme-color"]');
+  if (themeColor) themeColor.setAttribute("content", isDark ? "#111a22" : "#f3f6f8");
+  if (savePreference) {
+    try { localStorage.setItem("flyers-theme", selected); } catch (_error) {}
+  }
+}
+
+function initializeTheme() {
+  let savedTheme = "light";
+  try {
+    savedTheme = localStorage.getItem("flyers-theme") || "light";
+  } catch (_error) {}
+  applyTheme(savedTheme, false);
+}
+
 
 function setAuthMode(mode) {
   authMode = mode;
@@ -906,6 +929,11 @@ $("#auth-form").addEventListener("submit", async function (event) {
   }
 });
 
+$("#theme-toggle").addEventListener("click", function () {
+  const current = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  applyTheme(current === "dark" ? "light" : "dark", true);
+});
+
 $("#logout-button").addEventListener("click", async function () {
   try { await api("/api/auth/logout", { method: "POST", body: {} }); } catch (_error) {}
   feedState = { posts: [], hasMore: false, nextCursor: null, loading: false };
@@ -1214,5 +1242,6 @@ $("#new-posts-button").addEventListener("click", function () {
   $("#new-posts-bar").hidden = true;
 });
 
+initializeTheme();
 $("#post-flight-date").value = localDate();
 checkSession();
