@@ -5,6 +5,12 @@ let currentUser = null;
 let selectedPlanes = [];
 let knownPlanes = [];
 let selectedPhotoBase64 = "";
+let selectedHangarPhotoBase64 = "";
+let selectedAvatarBase64 = "";
+let participantsCache = [];
+let activeHangarUserId = null;
+let activeHangarUsername = "";
+let activeHangarIsMine = true;
 let feedState = {
   posts: [],
   hasMore: false,
@@ -87,6 +93,12 @@ function setAuthMode(mode) {
 function showSignedOut() {
   stopFeedPolling();
   currentUser = null;
+  participantsCache = [];
+  activeHangarUserId = null;
+  activeHangarUsername = "";
+  activeHangarIsMine = true;
+  selectedHangarPhotoBase64 = "";
+  selectedAvatarBase64 = "";
   $("#auth-section").hidden = false;
   $("#app-section").hidden = true;
   $("#account-area").hidden = true;
@@ -104,6 +116,7 @@ function showSignedIn(user) {
   $("#account-name").textContent = user.username;
   $("#welcome-name").textContent = user.username;
   $("#admin-tab").hidden = !user.isAdmin;
+  renderTopbarAvatar(user.avatarBase64 || "", user.username);
 }
 
 function formatDate(value) {
@@ -351,6 +364,174 @@ async function loadAdminPanel() {
   }
 }
 
+
+function avatarMarkup(base64, username, className) {
+  const initial = username ? username.slice(0, 1).toUpperCase() : "?";
+  if (base64) {
+    return '<img class="' + className + '" src="data:image/jpeg;base64,' +
+      escapeHtml(base64) + '" alt="' + escapeHtml(username || "Participant") + ' profile picture">';
+  }
+  return '<span class="' + className + ' avatar-fallback" aria-hidden="true">' +
+    escapeHtml(initial) + '</span>';
+}
+
+function renderTopbarAvatar(base64, username) {
+  $("#topbar-avatar").innerHTML = base64
+    ? '<img src="data:image/jpeg;base64,' + escapeHtml(base64) + '" alt="">'
+    : escapeHtml(username ? username.slice(0, 1).toUpperCase() : "?");
+}
+
+async function loadParticipants() {
+  showMessage($("#participants-message"), "", false);
+  $("#participants-list").innerHTML = '<p class="muted">Loading participants…</p>';
+  try {
+    const result = await api("/api/participants");
+    participantsCache = Array.isArray(result.participants) ? result.participants : [];
+    $("#participants-count").textContent = String(participantsCache.length);
+    if (!participantsCache.length) {
+      $("#participants-list").innerHTML = '<div class="feed-empty"><strong>No participants yet</strong>Group members will appear here after they create an account.</div>';
+      return;
+    }
+    $("#participants-list").innerHTML = participantsCache.map(function (person) {
+      const aircraft = person.planes && person.planes.length
+        ? person.planes.map(function (name) { return '<span class="post-plane">' + escapeHtml(name) + '</span>'; }).join("")
+        : '<span class="participant-no-planes">No aircraft listed yet</span>';
+      return '<article class="participant-card">' +
+        '<div class="participant-top">' +
+          avatarMarkup(person.avatarBase64, person.username, "participant-avatar") +
+          '<div class="participant-name"><strong>' + escapeHtml(person.username) + '</strong>' +
+          '<small>' + (person.id === currentUser.id ? "You" : "Group member") + '</small></div>' +
+        '</div>' +
+        '<div class="participant-week-stat"><strong>' + escapeHtml(String(person.weeksCompleted || 0)) +
+        '</strong><span>weeks with a logged session</span></div>' +
+        '<div class="participant-aircraft"><span class="post-plane-label">Hangar aircraft</span>' +
+        '<div class="post-planes">' + aircraft + '</div></div>' +
+        '<button class="button button-quiet button-small participant-hangar-button" type="button" data-view-hangar="' +
+        escapeHtml(person.id) + '" data-view-hangar-name="' + escapeHtml(person.username) + '">View Hangar</button>' +
+      '</article>';
+    }).join("");
+  } catch (error) {
+    $("#participants-list").innerHTML = "";
+    showMessage($("#participants-message"), error.message, false);
+  }
+}
+
+function openHangar(userId, username) {
+  activeHangarUserId = userId || currentUser.id;
+  activeHangarUsername = username || currentUser.username;
+  switchView("hangar");
+}
+
+function resetHangarPhoto() {
+  selectedHangarPhotoBase64 = "";
+  $("#hangar-photo").value = "";
+  $("#hangar-photo-preview").removeAttribute("src");
+  $("#hangar-photo-preview-wrap").hidden = true;
+}
+
+function renderHangar(data) {
+  activeHangarIsMine = Boolean(data.isMine);
+  activeHangarUsername = data.owner.username;
+  $("#hangar-title").textContent = activeHangarIsMine ? "My Hangar" : data.owner.username + "'s Hangar";
+  $("#hangar-subtitle").textContent = activeHangarIsMine
+    ? "Your aircraft collection. Add the RC planes you own."
+    : "Aircraft listed by " + data.owner.username + ".";
+  $("#hangar-add-panel").hidden = !activeHangarIsMine;
+  $("#hangar-back-button").hidden = activeHangarIsMine;
+  const planes = Array.isArray(data.planes) ? data.planes : [];
+  if (!planes.length) {
+    $("#hangar-list").innerHTML = '<div class="feed-empty"><strong>This Hangar is empty</strong>' +
+      (activeHangarIsMine ? "Add an aircraft you own to get started." : "This participant has not listed any aircraft yet.") +
+      '</div>';
+    return;
+  }
+  $("#hangar-list").innerHTML = planes.map(function (plane) {
+    const photo = plane.photo_base64
+      ? '<div class="hangar-photo-wrap"><img src="data:image/jpeg;base64,' +
+        escapeHtml(plane.photo_base64) + '" alt="' + escapeHtml(plane.name) + '" loading="lazy"></div>'
+      : '<div class="hangar-photo-placeholder"><span>✈</span><small>No photo</small></div>';
+    const description = plane.description
+      ? '<p class="hangar-plane-description">' + escapeHtml(plane.description) + '</p>'
+      : "";
+    const remove = activeHangarIsMine
+      ? '<button class="text-button" type="button" data-delete-hangar-plane="' + escapeHtml(plane.id) +
+        '" data-delete-hangar-name="' + escapeHtml(plane.name) + '">Remove from Hangar</button>'
+      : "";
+    return '<article class="hangar-card">' + photo +
+      '<div class="hangar-card-body"><h3>' + escapeHtml(plane.name) + '</h3>' +
+      description + '<div class="hangar-card-footer">' + remove + '</div></div></article>';
+  }).join("");
+}
+
+async function loadHangar() {
+  if (!currentUser) return;
+  if (!activeHangarUserId) {
+    activeHangarUserId = currentUser.id;
+    activeHangarUsername = currentUser.username;
+  }
+  $("#hangar-list").innerHTML = '<p class="muted">Loading Hangar…</p>';
+  showMessage($("#hangar-message"), "", false);
+  try {
+    const result = await api("/api/hangar?userId=" + encodeURIComponent(activeHangarUserId));
+    renderHangar(result);
+  } catch (error) {
+    $("#hangar-list").innerHTML = "";
+    showMessage($("#hangar-message"), error.message, false);
+  }
+}
+
+async function loadSettings() {
+  showMessage($("#settings-message"), "", false);
+  try {
+    const result = await api("/api/settings");
+    selectedAvatarBase64 = result.avatarBase64 || "";
+    $("#settings-username").value = result.user.username;
+    updateSettingsAvatarPreview();
+    currentUser = result.user;
+    currentUser.avatarBase64 = selectedAvatarBase64;
+    $("#account-name").textContent = currentUser.username;
+    renderTopbarAvatar(selectedAvatarBase64, currentUser.username);
+    $("#admin-tab").hidden = !currentUser.isAdmin;
+  } catch (error) {
+    showMessage($("#settings-message"), error.message, false);
+  }
+}
+
+function updateSettingsAvatarPreview() {
+  $("#settings-avatar-preview").innerHTML = selectedAvatarBase64
+    ? '<img src="data:image/jpeg;base64,' + escapeHtml(selectedAvatarBase64) + '" alt="">'
+    : escapeHtml(currentUser && currentUser.username ? currentUser.username.slice(0, 1).toUpperCase() : "?");
+}
+
+async function handleHangarPhotoSelection(file) {
+  if (!file) return;
+  showMessage($("#hangar-photo-message"), "Preparing photo…", false);
+  try {
+    const result = await compressPhoto(file, 135000);
+    selectedHangarPhotoBase64 = result.base64;
+    $("#hangar-photo-preview").src = result.preview;
+    $("#hangar-photo-caption").textContent = (file.name || "Aircraft photo") + " · " +
+      Math.round(result.sizeBytes / 1024) + " KB";
+    $("#hangar-photo-preview-wrap").hidden = false;
+    showMessage($("#hangar-photo-message"), "Photo ready.", true);
+  } catch (error) {
+    resetHangarPhoto();
+    showMessage($("#hangar-photo-message"), error.message, false);
+  }
+}
+
+async function handleAvatarPhotoSelection(file) {
+  if (!file) return;
+  showMessage($("#settings-avatar-message"), "Preparing picture…", false);
+  try {
+    const result = await compressPhoto(file, 112000);
+    selectedAvatarBase64 = result.base64;
+    updateSettingsAvatarPreview();
+    showMessage($("#settings-avatar-message"), "Profile picture ready.", true);
+  } catch (error) {
+    showMessage($("#settings-avatar-message"), error.message, false);
+  }
+}
 function updatePlaneSuggestions(planes) {
   knownPlanes = Array.isArray(planes) ? planes : [];
   $("#plane-suggestions").innerHTML = knownPlanes
@@ -419,16 +600,28 @@ function switchView(view) {
   const isFeed = view === "feed";
   const isMine = view === "mine";
   const isLog = view === "log";
+  const isParticipants = view === "participants";
+  const isHangar = view === "hangar";
+  const isSettings = view === "settings";
   const isAdminView = view === "admin";
   $("#feed-view").hidden = !isFeed;
   $("#my-logs-view").hidden = !isMine;
   $("#log-view").hidden = !isLog;
+  $("#participants-view").hidden = !isParticipants;
+  $("#hangar-view").hidden = !isHangar;
+  $("#settings-view").hidden = !isSettings;
   $("#admin-view").hidden = !isAdminView;
   $("#feed-tab").classList.toggle("active", isFeed);
   $("#my-logs-tab").classList.toggle("active", isMine);
+  $("#participants-tab").classList.toggle("active", isParticipants);
+  $("#hangar-tab").classList.toggle("active", isHangar);
+  $("#settings-tab").classList.toggle("active", isSettings);
   $("#admin-tab").classList.toggle("active", isAdminView);
   $("#feed-tab").toggleAttribute("aria-current", isFeed);
   $("#my-logs-tab").toggleAttribute("aria-current", isMine);
+  $("#participants-tab").toggleAttribute("aria-current", isParticipants);
+  $("#hangar-tab").toggleAttribute("aria-current", isHangar);
+  $("#settings-tab").toggleAttribute("aria-current", isSettings);
   $("#admin-tab").toggleAttribute("aria-current", isAdminView);
 
   if (isFeed) {
@@ -445,6 +638,9 @@ function switchView(view) {
     stopFeedPolling();
   }
   if (isMine) loadMyLogs();
+  if (view === "participants") loadParticipants();
+  if (view === "hangar") loadHangar();
+  if (view === "settings") loadSettings();
   if (isAdminView) loadAdminPanel();
   if (isLog) {
     $("#post-flight-date").value = localDate();
@@ -552,8 +748,10 @@ function blobToBase64(blob) {
   });
 }
 
-async function compressPhoto(file) {
+async function compressPhoto(file, maximumBlobBytes) {
   if (!file) throw new Error("Choose a photo from your camera roll.");
+  const maxBlobBytes = Number.isInteger(maximumBlobBytes) && maximumBlobBytes > 0
+    ? maximumBlobBytes : 315000;
   // Some mobile pickers provide an empty or generic MIME type. Do not reject
   // the file based on MIME metadata; attempt to decode it instead.
   if (file.size > 25 * 1024 * 1024) {
@@ -584,7 +782,7 @@ async function compressPhoto(file) {
       throw new Error("That photo has an unusually large resolution. Please choose a smaller camera-roll copy.");
     }
 
-    const maxBase64Length = 420000;
+    const maxBase64Length = Math.floor(maxBlobBytes * 4 / 3);
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d", { alpha: false });
     if (!context) throw new Error("Your browser could not prepare this photo.");
@@ -613,7 +811,7 @@ async function compressPhoto(file) {
       for (const quality of qualities) {
         const blob = await canvasToJpegBlob(canvas, quality);
         lastSize = blob.size;
-        if (blob.size > 315000) continue;
+        if (blob.size > maxBlobBytes) continue;
         const base64 = await blobToBase64(blob);
         if (base64.length <= maxBase64Length) {
           return {
@@ -801,6 +999,112 @@ $("#admin-users-list").addEventListener("click", async function (event) {
     showMessage($("#admin-message"), error.message, false);
     button.disabled = false;
     button.textContent = suspending ? "Kick user" : "Restore";
+  }
+});
+
+
+$("#participants-tab").addEventListener("click", function () { switchView("participants"); });
+$("#hangar-tab").addEventListener("click", function () {
+  openHangar(currentUser.id, currentUser.username);
+});
+$("#settings-tab").addEventListener("click", function () { switchView("settings"); });
+$("#participants-list").addEventListener("click", function (event) {
+  const button = event.target.closest("[data-view-hangar]");
+  if (!button) return;
+  openHangar(button.getAttribute("data-view-hangar"), button.getAttribute("data-view-hangar-name"));
+});
+$("#hangar-back-button").addEventListener("click", function () { switchView("participants"); });
+
+$("#hangar-photo").addEventListener("change", function () {
+  handleHangarPhotoSelection(this.files && this.files[0]);
+});
+$("#hangar-remove-photo-button").addEventListener("click", function () {
+  resetHangarPhoto();
+  showMessage($("#hangar-photo-message"), "Photo removed.", false);
+});
+$("#hangar-form").addEventListener("submit", async function (event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = $("#hangar-save-button");
+  const name = $("#hangar-plane-name").value.trim();
+  setBusy(button, true, "Adding…");
+  showMessage($("#hangar-form-message"), "", false);
+  try {
+    await api("/api/hangar", {
+      method: "POST",
+      body: {
+        name: name,
+        description: $("#hangar-plane-description").value.trim(),
+        photoBase64: selectedHangarPhotoBase64
+      }
+    });
+    form.reset();
+    resetHangarPhoto();
+    showMessage($("#hangar-form-message"), "Aircraft added to your Hangar.", true);
+    await loadHangar();
+    await loadParticipants();
+    toast("Aircraft added to your Hangar.");
+  } catch (error) {
+    showMessage($("#hangar-form-message"), error.message, false);
+  } finally {
+    setBusy(button, false);
+  }
+});
+$("#hangar-list").addEventListener("click", async function (event) {
+  const button = event.target.closest("[data-delete-hangar-plane]");
+  if (!button || !activeHangarIsMine) return;
+  const id = button.getAttribute("data-delete-hangar-plane");
+  const name = button.getAttribute("data-delete-hangar-name");
+  if (!window.confirm("Remove " + name + " from your Hangar?")) return;
+  setBusy(button, true, "Removing…");
+  try {
+    await api("/api/hangar/" + encodeURIComponent(id), { method: "DELETE" });
+    await loadHangar();
+    await loadParticipants();
+    toast("Aircraft removed from your Hangar.");
+  } catch (error) {
+    showMessage($("#hangar-message"), error.message, false);
+    button.disabled = false;
+    button.textContent = "Remove from Hangar";
+  }
+});
+
+$("#settings-avatar-file").addEventListener("change", function () {
+  handleAvatarPhotoSelection(this.files && this.files[0]);
+});
+$("#settings-avatar-remove").addEventListener("click", function () {
+  selectedAvatarBase64 = "";
+  $("#settings-avatar-file").value = "";
+  updateSettingsAvatarPreview();
+  showMessage($("#settings-avatar-message"), "Profile picture will be removed when you save.", false);
+});
+$("#settings-form").addEventListener("submit", async function (event) {
+  event.preventDefault();
+  const button = $("#settings-save-button");
+  setBusy(button, true, "Saving…");
+  showMessage($("#settings-message"), "", false);
+  try {
+    const result = await api("/api/settings", {
+      method: "POST",
+      body: {
+        username: $("#settings-username").value.trim(),
+        avatarBase64: selectedAvatarBase64
+      }
+    });
+    currentUser = result.user;
+    currentUser.avatarBase64 = result.avatarBase64 || "";
+    showSignedIn(currentUser);
+    $("#settings-username").value = currentUser.username;
+    selectedAvatarBase64 = currentUser.avatarBase64;
+    updateSettingsAvatarPreview();
+    showMessage($("#settings-message"), "Your profile has been updated.", true);
+    if (!currentUser.isAdmin && !$("#admin-view").hidden) switchView("feed");
+    await loadParticipants();
+    toast("Settings saved.");
+  } catch (error) {
+    showMessage($("#settings-message"), error.message, false);
+  } finally {
+    setBusy(button, false);
   }
 });
 
