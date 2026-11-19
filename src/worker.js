@@ -278,24 +278,43 @@ function publicFlight(row) {
 async function handleDashboard(env, user) {
   const results = await Promise.all([
     env.DB.prepare(
-      "SELECT id, flight_date, aircraft, duration_minutes, notes, created_at " +
-      "FROM flights WHERE user_id = ? ORDER BY flight_date DESC, created_at DESC LIMIT 100"
-    ).bind(user.id).all(),
+      "SELECT COUNT(*) AS total, COUNT(DISTINCT flight_date) AS flying_days " +
+      "FROM flight_posts WHERE user_id = ?"
+    ).bind(user.id).first(),
     env.DB.prepare(
-      "SELECT COUNT(*) AS total, COALESCE(SUM(duration_minutes), 0) AS minutes, " +
-      "COUNT(DISTINCT flight_date) AS flying_days FROM flights WHERE user_id = ?"
-    ).bind(user.id).first()
+      "SELECT planes_json FROM flight_posts WHERE user_id = ? ORDER BY created_at DESC LIMIT 500"
+    ).bind(user.id).all()
   ]);
-  const totals = results[1] || { total: 0, minutes: 0, flying_days: 0 };
+
+  const totals = results[0] || { total: 0, flying_days: 0 };
+  const planeNames = new Map();
+  for (const row of results[1].results || []) {
+    try {
+      const planes = JSON.parse(row.planes_json);
+      if (Array.isArray(planes)) {
+        for (const plane of planes) {
+          if (typeof plane === "string" && plane.trim()) {
+            const name = plane.trim();
+            planeNames.set(name.toLowerCase(), name);
+          }
+        }
+      }
+    } catch (_error) {
+      // Skip malformed legacy plane lists; the post itself remains readable.
+    }
+  }
+  const knownPlanes = Array.from(planeNames.values()).sort(function (a, b) {
+    return a.localeCompare(b);
+  });
+
   return json({
     user: { id: user.id, username: user.username },
-    flights: (results[0].results || []).map(publicFlight),
-    totalFlights: totals.total || 0,
-    totalMinutes: totals.minutes || 0,
-    flyingDays: totals.flying_days || 0
+    totalPosts: totals.total || 0,
+    flyingDays: totals.flying_days || 0,
+    uniquePlanes: knownPlanes.length,
+    knownPlanes: knownPlanes
   });
 }
-
 async function handleCreateFlight(request, env, user) {
   const body = await readJson(request);
   const flightDate = typeof body.flightDate === "string" ? body.flightDate : "";
@@ -502,7 +521,7 @@ async function routeApi(request, env) {
   if (method === "GET" && path === "/api/health") {
     try {
       await env.DB.prepare("SELECT 1 AS ok").first();
-      const requiredTables = ["users", "sessions", "flights", "rate_limits"];
+      const requiredTables = ["users", "sessions", "flights", "rate_limits", "flight_posts"];
       const tableRows = await env.DB.prepare(
         "SELECT name FROM sqlite_master WHERE type = 'table'"
       ).all();
