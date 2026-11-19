@@ -381,57 +381,135 @@ function clearPhoto() {
   $("#photo-file-name").textContent = "";
 }
 
-function waitForImage(url) {
-  return new Promise(function (resolve, reject) {
-    const image = new Image();
-    image.onload = function () { resolve(image); };
-    image.onerror = function () { reject(new Error("That image could not be opened. Please choose another photo.")); };
-    image.src = url;
-  });
-}
-
-async function compressPhoto(file) {
-  if (!file || !file.type || !file.type.startsWith("image/")) {
-    throw new Error("Please choose an image file.");
-  }
-  if (file.size > 12 * 1024 * 1024) {
-    throw new Error("Please choose a photo smaller than 12 MB.");
+async function decodeSelectedImage(file) {
+  // Prefer createImageBitmap, which applies the image orientation metadata on
+  // supported browsers. Safari's native image decoder also handles HEIC.
+  if (typeof createImageBitmap === "function") {
+    try {
+      return await createImageBitmap(file, { imageOrientation: "from-image" });
+    } catch (_firstError) {
+      try {
+        return await createImageBitmap(file);
+      } catch (_secondError) {
+        // Fall through to an HTMLImageElement for older mobile browsers.
+      }
+    }
   }
 
   const objectUrl = URL.createObjectURL(file);
   try {
-    const image = await waitForImage(objectUrl);
-    const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
-    const scale = Math.min(1, 1200 / longestSide);
-    let width = Math.max(1, Math.round(image.naturalWidth * scale));
-    let height = Math.max(1, Math.round(image.naturalHeight * scale));
+    return await new Promise(function (resolve, reject) {
+      const image = new Image();
+      image.onload = function () { resolve(image); };
+      image.onerror = function () {
+        reject(new Error("Your browser couldn't read this photo format. Try choosing a JPEG version from your camera roll."));
+      };
+      image.src = objectUrl;
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function canvasToJpegBlob(canvas, quality) {
+  return new Promise(function (resolve, reject) {
+    canvas.toBlob(function (blob) {
+      if (blob) resolve(blob);
+      else reject(new Error("Your browser couldn't convert this photo. Please try another image."));
+    }, "image/jpeg", quality);
+  });
+}
+
+function blobToBase64(blob) {
+  return new Promise(function (resolve, reject) {
+    const reader = new FileReader();
+    reader.onload = function () {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const comma = result.indexOf(",");
+      if (comma < 0) reject(new Error("The photo could not be prepared for upload."));
+      else resolve(result.slice(comma + 1));
+    };
+    reader.onerror = function () {
+      reject(new Error("The photo could not be prepared for upload."));
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function compressPhoto(file) {
+  if (!file) throw new Error("Choose a photo from your camera roll.");
+  // Some mobile pickers provide an empty or generic MIME type. Do not reject
+  // the file based on MIME metadata; attempt to decode it instead.
+  if (file.size > 25 * 1024 * 1024) {
+    throw new Error("Please choose a photo smaller than 25 MB.");
+  }
+  if (file.size < 1) throw new Error("That photo appears to be empty.");
+
+  let image;
+  try {
+    image = await decodeSelectedImage(file);
+  } catch (_error) {
+    const type = (file.type || "").toLowerCase();
+    const extension = (file.name || "").toLowerCase();
+    if (type.includes("heic") || type.includes("heif") ||
+        extension.endsWith(".heic") || extension.endsWith(".heif")) {
+      throw new Error("This browser couldn't open that HEIC photo. Try selecting the photo from your camera roll's Photo Library rather than Browse, or choose a JPEG copy.");
+    }
+    throw new Error("Your browser couldn't read this photo. Please choose a JPG, PNG, or WebP image from your camera roll.");
+  }
+
+  try {
+    const originalWidth = image.width || image.naturalWidth;
+    const originalHeight = image.height || image.naturalHeight;
+    if (!originalWidth || !originalHeight) {
+      throw new Error("The selected photo has no readable image dimensions.");
+    }
+    if (originalWidth * originalHeight > 50000000) {
+      throw new Error("That photo has an unusually large resolution. Please choose a smaller camera-roll copy.");
+    }
+
+    const maxBase64Length = 420000;
     const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
+    const context = canvas.getContext("2d", { alpha: false });
     if (!context) throw new Error("Your browser could not prepare this photo.");
 
-    function drawAndEncode(quality) {
+    // Try good quality first, then progressively reduce quality and dimensions
+    // until the JPEG fits the D1 row and request limits.
+    const maxDimensions = [1600, 1400, 1200, 1000, 850, 720, 600];
+    const qualities = [0.82, 0.72, 0.62, 0.52, 0.44];
+    let lastSize = 0;
+
+    for (const maxSide of maxDimensions) {
+      const scale = Math.min(1, maxSide / Math.max(originalWidth, originalHeight));
+      const width = Math.max(1, Math.round(originalWidth * scale));
+      const height = Math.max(1, Math.round(originalHeight * scale));
       canvas.width = width;
       canvas.height = height;
       context.fillStyle = "#ffffff";
       context.fillRect(0, 0, width, height);
       context.drawImage(image, 0, 0, width, height);
-      return canvas.toDataURL("image/jpeg", quality).split(",")[1];
+
+      for (const quality of qualities) {
+        const blob = await canvasToJpegBlob(canvas, quality);
+        lastSize = blob.size;
+        if (blob.size > 315000) continue;
+        const base64 = await blobToBase64(blob);
+        if (base64.length <= maxBase64Length) {
+          return {
+            base64: base64,
+            preview: "data:image/jpeg;base64," + base64,
+            sizeBytes: blob.size
+          };
+        }
+      }
     }
 
-    let base64 = drawAndEncode(0.72);
-    if (base64.length > 440000) base64 = drawAndEncode(0.58);
-    if (base64.length > 440000) {
-      const scaleDown = Math.min(1, 900 / Math.max(width, height));
-      width = Math.max(1, Math.round(width * scaleDown));
-      height = Math.max(1, Math.round(height * scaleDown));
-      base64 = drawAndEncode(0.52);
-    }
-    if (base64.length > 440000) {
-      throw new Error("This photo is still too large after resizing. Please choose a smaller image.");
-    }
-    return { base64: base64, preview: "data:image/jpeg;base64," + base64 };
+    throw new Error(
+      "This photo is still too large after resizing (" +
+      Math.round(lastSize / 1024) + " KB). Please choose a smaller photo."
+    );
   } finally {
-    URL.revokeObjectURL(objectUrl);
+    if (image && typeof image.close === "function") image.close();
   }
 }
 
@@ -442,7 +520,8 @@ async function handlePhotoSelection(file) {
     const result = await compressPhoto(file);
     selectedPhotoBase64 = result.base64;
     $("#photo-preview").src = result.preview;
-    $("#photo-file-name").textContent = file.name || "Photo ready";
+    $("#photo-file-name").textContent =
+      (file.name || "Camera-roll photo") + " · " + Math.round(result.sizeBytes / 1024) + " KB";
     $("#photo-preview-wrap").hidden = false;
     $("#photo-drop").hidden = true;
     showMessage($("#photo-message"), "Photo ready to upload.", true);
