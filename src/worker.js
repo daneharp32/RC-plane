@@ -126,13 +126,20 @@ function validateOrigin(request) {
 async function consumeRateLimit(db, key, maxRequests, windowMs) {
   const now = Date.now();
   const resetAt = now + windowMs;
-  const row = await db.prepare(
+
+  // Use a regular D1 write followed by a read. This avoids relying on
+  // INSERT ... RETURNING support in the authentication hot path.
+  await db.prepare(
     "INSERT INTO rate_limits (id, request_count, reset_at) VALUES (?, 1, ?) " +
     "ON CONFLICT(id) DO UPDATE SET " +
     "request_count = CASE WHEN rate_limits.reset_at <= ? THEN 1 ELSE rate_limits.request_count + 1 END, " +
-    "reset_at = CASE WHEN rate_limits.reset_at <= ? THEN excluded.reset_at ELSE rate_limits.reset_at END " +
-    "RETURNING request_count, reset_at"
-  ).bind(key, resetAt, now, now).first();
+    "reset_at = CASE WHEN rate_limits.reset_at <= ? THEN excluded.reset_at ELSE rate_limits.reset_at END"
+  ).bind(key, resetAt, now, now).run();
+
+  const row = await db.prepare(
+    "SELECT request_count, reset_at FROM rate_limits WHERE id = ?"
+  ).bind(key).first();
+
   return {
     allowed: Boolean(row && row.request_count <= maxRequests),
     retryAfter: row ? Math.max(1, Math.ceil((row.reset_at - now) / 1000)) : 60
@@ -336,9 +343,32 @@ async function routeApi(request, env) {
   if (method === "GET" && path === "/api/health") {
     try {
       await env.DB.prepare("SELECT 1 AS ok").first();
-      return json({ ok: true, database: "connected" });
-    } catch (_error) {
-      return errorResponse("The database is configured but its tables are not ready. Apply the migration.", 503);
+      const requiredTables = ["users", "sessions", "flights", "rate_limits"];
+      const tableRows = await env.DB.prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table'"
+      ).all();
+      const present = new Set((tableRows.results || []).map(function (row) { return row.name; }));
+      const missing = requiredTables.filter(function (name) { return !present.has(name); });
+      if (missing.length) {
+        return json({ ok: false, database: "connected", schema: "incomplete", missingTables: missing }, 503);
+      }
+      // Exercise the same simple read/write pattern used by registration rate limits.
+      const probeKey = "health-check:" + randomId();
+      const now = Date.now();
+      await env.DB.prepare(
+        "INSERT INTO rate_limits (id, request_count, reset_at) VALUES (?, 1, ?)"
+      ).bind(probeKey, now + 60000).run();
+      const probe = await env.DB.prepare(
+        "SELECT request_count FROM rate_limits WHERE id = ?"
+      ).bind(probeKey).first();
+      await env.DB.prepare("DELETE FROM rate_limits WHERE id = ?").bind(probeKey).run();
+      if (!probe || probe.request_count !== 1) {
+        return json({ ok: false, database: "connected", schema: "ready", rateLimitCheck: "failed" }, 503);
+      }
+      return json({ ok: true, database: "connected", schema: "ready", rateLimitCheck: "passed" });
+    } catch (error) {
+      console.error("Health check failed:", error && error.message ? error.message : "unknown error");
+      return json({ ok: false, database: "error", message: "A database check failed. Check Worker logs." }, 503);
     }
   }
 
