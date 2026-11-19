@@ -867,6 +867,7 @@ async function checkSession() {
     const result = await api("/api/me");
     if (result.user) {
       showSignedIn(result.user);
+      await loadSettings();
       await refreshMyStats();
       await loadChallengeBanner();
       switchView("feed");
