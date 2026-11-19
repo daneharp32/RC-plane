@@ -173,7 +173,7 @@ async function requireUser(request, db) {
 
 function normalizeAdminUsername(value) {
   return typeof value === "string"
-    ? value.normalize("NFKC").replace(/[\\u200B-\\u200D\\uFEFF]/g, "").trim().toLowerCase()
+    ? value.normalize("NFKC").trim().toLowerCase()
     : "";
 }
 
