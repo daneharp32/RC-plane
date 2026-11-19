@@ -102,11 +102,12 @@ function localToday() {
   return values.year + "-" + values.month + "-" + values.day;
 }
 
-async function readJson(request) {
+async function readJson(request, maxLength) {
+  const maximum = Number.isInteger(maxLength) ? maxLength : 16000;
   const contentLength = Number(request.headers.get("Content-Length") || "0");
-  if (contentLength > 16000) throw new Error("Request is too large.");
+  if (contentLength > maximum) throw new Error("Request is too large.");
   const text = await request.text();
-  if (text.length > 16000) throw new Error("Request is too large.");
+  if (text.length > maximum) throw new Error("Request is too large.");
   try {
     return JSON.parse(text || "{}");
   } catch (_error) {
@@ -337,12 +338,166 @@ async function handleDeleteFlight(env, user, flightId) {
   return json({ ok: true });
 }
 
+
+let flightPostsSchemaReady = false;
+
+async function ensureFlightPostsSchema(db) {
+  if (flightPostsSchemaReady) return;
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS flight_posts (" +
+    "id TEXT PRIMARY KEY, " +
+    "user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, " +
+    "flight_date TEXT NOT NULL, " +
+    "spot TEXT NOT NULL CHECK (spot IN ('chill_guy','unc_road','sports_park','shore_cliffs','other')), " +
+    "other_spot TEXT NOT NULL DEFAULT '', " +
+    "planes_json TEXT NOT NULL, " +
+    "description TEXT NOT NULL DEFAULT '', " +
+    "photo_mime TEXT NOT NULL DEFAULT 'image/jpeg' CHECK (photo_mime = 'image/jpeg'), " +
+    "photo_base64 TEXT NOT NULL CHECK (length(photo_base64) <= 440000), " +
+    "created_at TEXT NOT NULL)"
+  ).run();
+  await db.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_flight_posts_created ON flight_posts(created_at DESC, id DESC)"
+  ).run();
+  await db.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_flight_posts_user_created ON flight_posts(user_id, created_at DESC, id DESC)"
+  ).run();
+  flightPostsSchemaReady = true;
+}
+
+function publicPost(row) {
+  let planes = [];
+  try {
+    const parsed = JSON.parse(row.planes_json);
+    if (Array.isArray(parsed)) planes = parsed.slice(0, 8);
+  } catch (_error) {
+    planes = [];
+  }
+  return {
+    id: row.id,
+    username: row.username,
+    flightDate: row.flight_date,
+    spot: row.spot,
+    otherSpot: row.other_spot,
+    planes: planes,
+    description: row.description,
+    photoMime: row.photo_mime,
+    photoBase64: row.photo_base64,
+    createdAt: row.created_at
+  };
+}
+
+async function handleCreatePost(request, env, user) {
+  const body = await readJson(request, 560000);
+  const flightDate = typeof body.flightDate === "string" ? body.flightDate : "";
+  const spot = typeof body.spot === "string" ? body.spot : "";
+  const otherSpot = typeof body.otherSpot === "string" ? body.otherSpot.trim() : "";
+  const description = typeof body.description === "string" ? body.description.trim() : "";
+  const planes = Array.isArray(body.planes) ? body.planes : [];
+  const photoMime = typeof body.photoMime === "string" ? body.photoMime : "";
+  const photoBase64 = typeof body.photoBase64 === "string" ? body.photoBase64 : "";
+
+  const allowedSpots = ["chill_guy", "unc_road", "sports_park", "shore_cliffs", "other"];
+  if (!isValidDate(flightDate)) return errorResponse("Please choose a valid flight date.");
+  if (flightDate > localToday()) return errorResponse("A flight date cannot be in the future.");
+  if (!allowedSpots.includes(spot)) return errorResponse("Please choose a flying spot.");
+  if (spot === "other" && (otherSpot.length < 2 || otherSpot.length > 120)) {
+    return errorResponse("Please describe the flying spot in 2–120 characters.");
+  }
+  if (spot !== "other" && otherSpot) return errorResponse("Unexpected custom flying spot.");
+  if (!planes.length || planes.length > 8) return errorResponse("Add at least one plane (up to eight).");
+
+  const cleanPlanes = [];
+  for (const value of planes) {
+    if (typeof value !== "string") return errorResponse("Plane names must be text.");
+    const name = value.trim();
+    if (name.length < 2 || name.length > 60) return errorResponse("Plane names must be 2–60 characters.");
+    if (!cleanPlanes.some(function (existing) { return existing.toLowerCase() === name.toLowerCase(); })) {
+      cleanPlanes.push(name);
+    }
+  }
+  if (!cleanPlanes.length) return errorResponse("Add at least one plane.");
+  if (description.length > 1000) return errorResponse("Description must be 1,000 characters or fewer.");
+  if (photoMime !== "image/jpeg") return errorResponse("Please upload a photo. Images are converted to JPEG before upload.");
+  if (photoBase64.length < 100 || photoBase64.length > 440000 ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(photoBase64)) {
+    return errorResponse("Please upload a smaller, valid photo (maximum 320 KB after compression).");
+  }
+
+  const id = randomId();
+  const createdAt = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO flight_posts " +
+    "(id, user_id, flight_date, spot, other_spot, planes_json, description, photo_mime, photo_base64, created_at) " +
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).bind(
+    id,
+    user.id,
+    flightDate,
+    spot,
+    otherSpot,
+    JSON.stringify(cleanPlanes),
+    description,
+    photoMime,
+    photoBase64,
+    createdAt
+  ).run();
+
+  return json({ ok: true, id: id, createdAt: createdAt }, 201);
+}
+
+async function handleFeed(request, env, user) {
+  const url = new URL(request.url);
+  const mineOnly = url.searchParams.get("mine") === "1";
+  const limit = mineOnly ? 40 : 12;
+  const beforeCreatedAt = url.searchParams.get("beforeCreatedAt");
+  const beforeId = url.searchParams.get("beforeId");
+
+  let sql =
+    "SELECT p.id, p.flight_date, p.spot, p.other_spot, p.planes_json, " +
+    "p.description, p.photo_mime, p.photo_base64, p.created_at, u.username " +
+    "FROM flight_posts p JOIN users u ON u.id = p.user_id WHERE 1 = 1";
+  const bindings = [];
+  if (mineOnly) {
+    sql += " AND p.user_id = ?";
+    bindings.push(user.id);
+  }
+  if (beforeCreatedAt && beforeId &&
+      !Number.isNaN(Date.parse(beforeCreatedAt)) &&
+      /^[A-Za-z0-9_-]{10,40}$/.test(beforeId)) {
+    sql += " AND (p.created_at < ? OR (p.created_at = ? AND p.id < ?))";
+    bindings.push(beforeCreatedAt, beforeCreatedAt, beforeId);
+  }
+  sql += " ORDER BY p.created_at DESC, p.id DESC LIMIT ?";
+  bindings.push(limit + 1);
+
+  let statement = env.DB.prepare(sql);
+  if (bindings.length) statement = statement.bind.apply(statement, bindings);
+  const result = await statement.all();
+  const rows = result.results || [];
+  const hasMore = rows.length > limit;
+  const page = rows.slice(0, limit);
+  const oldest = page.length ? page[page.length - 1] : null;
+
+  return json({
+    posts: page.map(publicPost),
+    hasMore: hasMore,
+    nextCursor: hasMore && oldest ? {
+      createdAt: oldest.created_at,
+      id: oldest.id
+    } : null
+  });
+}
+
 async function routeApi(request, env) {
   const path = new URL(request.url).pathname;
   const method = request.method.toUpperCase();
   if (!env.DB) {
     return errorResponse("The D1 database is not connected yet. Follow the setup steps in the repository README.", 503);
   }
+
+  // Creates the social-feed table the first time the updated app is used.
+  await ensureFlightPostsSchema(env.DB);
 
   if (method === "GET" && path === "/api/health") {
     try {
@@ -391,6 +546,18 @@ async function routeApi(request, env) {
   if (method === "GET" && path === "/api/me") {
     const user = await getSession(request, env.DB);
     return json({ user: user ? { id: user.id, username: user.username } : null });
+  }
+
+  if (method === "GET" && path === "/api/feed") {
+    const auth = await requireUser(request, env.DB);
+    if (auth.response) return auth.response;
+    return handleFeed(request, env, auth.user);
+  }
+
+  if (method === "POST" && path === "/api/posts") {
+    const auth = await requireUser(request, env.DB);
+    if (auth.response) return auth.response;
+    return handleCreatePost(request, env, auth.user);
   }
 
   if (method === "GET" && path === "/api/dashboard") {
