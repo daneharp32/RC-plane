@@ -43,7 +43,7 @@ Do not configure this repository as a Pages static-site build. It is a Worker wi
 
 ### Administrator access
 
-Any signed-in account whose username contains `Dane), in any capitalization, receives administrator access. For example, `Dane`, `dane_harp`, and `RCPlaneDane23` all match. These accounts can delete posts, suspend or restore users, and manage the optional 360-day challenge.
+Any signed-in account whose username contains `Dane`, in any capitalization, receives administrator access. For example, `Dane`, `dane_harp`, and `RCPlaneDane23` all match. These accounts can delete posts, suspend or restore users, and manage the optional 360-day challenge.
 
 **Important:** this is a username-based rule, not a private invitation. Anyone who can register a matching username can obtain administrator access. Multiple matching accounts are all administrators and cannot be kicked or suspended from the dashboard. For a real group app, a single explicit administrator account or a server-side allowlist is much safer. No `ADMIN_USERNAME` Cloudflare variable is required by this rule.
 
