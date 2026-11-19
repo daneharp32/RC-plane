@@ -1,5 +1,17 @@
 const $ = function (selector) { return document.querySelector(selector); };
+
 let authMode = "login";
+let currentUser = null;
+let selectedPlanes = [];
+let knownPlanes = [];
+let selectedPhotoBase64 = "";
+let feedState = {
+  posts: [],
+  hasMore: false,
+  nextCursor: null,
+  loading: false
+};
+
 let toastTimer = null;
 
 function escapeHtml(value) {
@@ -63,15 +75,16 @@ function setAuthMode(mode) {
   $("#register-tab").setAttribute("aria-selected", String(register));
   $("#auth-title").textContent = register ? "Create your account" : "Welcome back";
   $("#auth-subtitle").textContent = register
-    ? "Choose a username and password to start your journal."
-    : "Sign in to view your personal flight journal.";
+    ? "Choose a username and password to join the flight journal."
+    : "Sign in to view the group flight feed.";
   $("#auth-submit").textContent = register ? "Create account" : "Sign in";
   $("#auth-password").setAttribute("autocomplete", register ? "new-password" : "current-password");
-  $("#password-help").textContent = register ? "Use at least 6 characters. Longer is safer." : "Enter your account password.";
+  $("#password-help").textContent = register ? "Use at least 6 characters." : "Enter your account password.";
   showMessage($("#auth-message"), "", false);
 }
 
 function showSignedOut() {
+  currentUser = null;
   $("#auth-section").hidden = false;
   $("#app-section").hidden = true;
   $("#account-area").hidden = true;
@@ -80,6 +93,7 @@ function showSignedOut() {
 }
 
 function showSignedIn(user) {
+  currentUser = user;
   $("#auth-section").hidden = true;
   $("#app-section").hidden = false;
   $("#account-area").hidden = false;
@@ -94,38 +108,307 @@ function formatDate(value) {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
-function renderFlights(flights, totalFlights) {
-  $("#flight-history-count").textContent = totalFlights + " recorded";
-  if (!flights.length) {
-    $("#flight-list").innerHTML = '<p class="empty-state">No flights recorded yet. Add details for a completed flight to start your journal.</p>';
+function formatTimestamp(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit"
+  }).format(date);
+}
+
+function spotLabel(post) {
+  const labels = {
+    chill_guy: "Chill Guy",
+    unc_road: "Unc Road",
+    sports_park: "Sports Park",
+    shore_cliffs: "Shore Cliffs",
+    other: post.otherSpot || "Other spot"
+  };
+  return labels[post.spot] || "Flying spot";
+}
+
+function renderPost(post) {
+  const photoSrc = "data:image/jpeg;base64," + post.photoBase64;
+  const planes = Array.isArray(post.planes) ? post.planes : [];
+  const initial = post.username ? post.username.slice(0, 1).toUpperCase() : "?";
+  const description = post.description
+    ? '<p class="post-description">' + escapeHtml(post.description) + "</p>"
+    : "";
+  return '<article class="post-card" data-post-id="' + escapeHtml(post.id) + '">' +
+    '<header class="post-header">' +
+      '<div class="post-author">' +
+        '<span class="avatar" aria-hidden="true">' + escapeHtml(initial) + "</span>" +
+        '<div class="post-author-copy"><strong>' + escapeHtml(post.username) + '</strong>' +
+        '<small>Flight date: ' + escapeHtml(formatDate(post.flightDate)) + "</small></div>" +
+      "</div>" +
+      '<time class="post-time" datetime="' + escapeHtml(post.createdAt) + '">' +
+        escapeHtml(formatTimestamp(post.createdAt)) + "</time>" +
+    "</header>" +
+    '<div class="post-photo-wrap"><img class="post-photo" src="' + photoSrc +
+      '" alt="RC plane at ' + escapeHtml(spotLabel(post)) + '" loading="lazy"></div>' +
+    '<div class="post-body">' +
+      '<div class="post-meta"><span class="post-chip spot">⌖ ' + escapeHtml(spotLabel(post)) +
+      '</span><span class="post-chip">✈ ' + planes.length + (planes.length === 1 ? " plane" : " planes") + "</span></div>" +
+      '<p class="post-plane-label">Aircraft flown</p><div class="post-planes">' +
+        planes.map(function (plane) { return '<span class="post-plane">' + escapeHtml(plane) + "</span>"; }).join("") +
+      "</div>" + description +
+    "</div>" +
+  "</article>";
+}
+
+function renderFeed() {
+  const list = $("#feed-list");
+  if (!feedState.posts.length) {
+    list.innerHTML = '<div class="feed-empty"><strong>No flight posts yet</strong>Be the first to share a photo from a completed flying session.</div>';
+  } else {
+    list.innerHTML = feedState.posts.map(renderPost).join("");
+  }
+  $("#load-older-button").hidden = !feedState.hasMore;
+  $("#feed-end").hidden = !feedState.posts.length;
+}
+
+async function loadFeed(older) {
+  if (feedState.loading) return;
+  if (older && (!feedState.hasMore || !feedState.nextCursor)) return;
+
+  feedState.loading = true;
+  $("#feed-loading").hidden = !older;
+  $("#load-older-button").disabled = true;
+  showMessage($("#feed-message"), "", false);
+
+  const scroller = $("#feed-scroller");
+  const oldHeight = scroller.scrollHeight;
+  const oldTop = scroller.scrollTop;
+
+  try {
+    let path = "/api/feed";
+    if (older && feedState.nextCursor) {
+      const query = new URLSearchParams({
+        beforeCreatedAt: feedState.nextCursor.createdAt,
+        beforeId: feedState.nextCursor.id
+      });
+      path += "?" + query.toString();
+    }
+
+    const result = await api(path);
+    const chronological = result.posts.slice().reverse();
+    if (older) {
+      feedState.posts = chronological.concat(feedState.posts);
+    } else {
+      feedState.posts = chronological;
+    }
+    feedState.hasMore = Boolean(result.hasMore);
+    feedState.nextCursor = result.nextCursor;
+    renderFeed();
+
+    requestAnimationFrame(function () {
+      if (older) {
+        scroller.scrollTop = oldTop + (scroller.scrollHeight - oldHeight);
+      } else {
+        scroller.scrollTop = scroller.scrollHeight;
+      }
+    });
+  } catch (error) {
+    showMessage($("#feed-message"), error.message, false);
+  } finally {
+    feedState.loading = false;
+    $("#feed-loading").hidden = true;
+    $("#load-older-button").disabled = false;
+  }
+}
+
+async function loadMyLogs() {
+  showMessage($("#my-logs-message"), "", false);
+  try {
+    const [dashboard, result] = await Promise.all([
+      api("/api/dashboard"),
+      api("/api/feed?mine=1")
+    ]);
+    $("#stat-posts").textContent = String(dashboard.totalPosts);
+    $("#stat-days").textContent = String(dashboard.flyingDays);
+    $("#stat-planes").textContent = String(dashboard.uniquePlanes);
+    if (!result.posts.length) {
+      $("#my-posts-list").innerHTML = '<div class="feed-empty"><strong>Your flight log is empty</strong>Use Log flight to add your first completed session.</div>';
+    } else {
+      $("#my-posts-list").innerHTML = result.posts.map(renderPost).join("");
+    }
+    updatePlaneSuggestions(dashboard.knownPlanes || []);
+  } catch (error) {
+    showMessage($("#my-logs-message"), error.message, false);
+  }
+}
+
+function updatePlaneSuggestions(planes) {
+  knownPlanes = Array.isArray(planes) ? planes : [];
+  $("#plane-suggestions").innerHTML = knownPlanes
+    .map(function (plane) { return '<option value="' + escapeHtml(plane) + '"></option>'; })
+    .join("");
+}
+
+function switchView(view) {
+  const isFeed = view === "feed";
+  const isMine = view === "mine";
+  const isLog = view === "log";
+  $("#feed-view").hidden = !isFeed;
+  $("#my-logs-view").hidden = !isMine;
+  $("#log-view").hidden = !isLog;
+  $("#feed-tab").classList.toggle("active", isFeed);
+  $("#my-logs-tab").classList.toggle("active", isMine);
+  $("#feed-tab").toggleAttribute("aria-current", isFeed);
+  $("#my-logs-tab").toggleAttribute("aria-current", isMine);
+  if (isMine) loadMyLogs();
+  if (isFeed) {
+    if (!feedState.posts.length) loadFeed(false);
+    else requestAnimationFrame(function () {
+      $("#feed-scroller").scrollTop = $("#feed-scroller").scrollHeight;
+    });
+  }
+  if (isLog) {
+    $("#post-flight-date").value = localDate();
+    showMessage($("#post-message"), "", false);
+    showMessage($("#photo-message"), "", false);
+  }
+}
+
+function renderSelectedPlanes() {
+  const container = $("#selected-planes");
+  if (!selectedPlanes.length) {
+    container.innerHTML = '<span id="no-planes-message" class="no-planes-message">No planes added yet.</span>';
     return;
   }
-  $("#flight-list").innerHTML = flights.map(function (flight) {
-    const notes = flight.notes ? '<p class="flight-notes">' + escapeHtml(flight.notes) + "</p>" : "";
-    return '<article class="flight-entry">' +
-      '<div class="flight-entry-main"><div class="flight-title">' + escapeHtml(flight.aircraft) + '</div>' +
-      '<div class="flight-date">' + escapeHtml(formatDate(flight.flightDate)) + '</div>' + notes + '</div>' +
-      '<div class="flight-entry-side"><strong>' + escapeHtml(flight.durationMinutes) + ' min</strong>' +
-      '<button class="delete-flight" type="button" data-delete-flight="' + escapeHtml(flight.id) + '" aria-label="Delete flight">Delete</button></div>' +
-      '</article>';
+  container.innerHTML = selectedPlanes.map(function (plane, index) {
+    return '<span class="plane-pill">' + escapeHtml(plane) +
+      '<button type="button" data-remove-plane="' + index + '" aria-label="Remove ' + escapeHtml(plane) + '">×</button></span>';
   }).join("");
 }
 
-async function loadDashboard() {
-  const dashboard = await api("/api/dashboard");
-  showSignedIn(dashboard.user);
-  $("#stat-flights").textContent = String(dashboard.totalFlights);
-  $("#stat-minutes").innerHTML = String(dashboard.totalMinutes) + " <em>min</em>";
-  $("#stat-days").textContent = String(dashboard.flyingDays);
-  $("#stat-latest").textContent = dashboard.flights.length ? formatDate(dashboard.flights[0].flightDate) : "—";
-  renderFlights(dashboard.flights, dashboard.totalFlights);
+function addPlane() {
+  const input = $("#plane-input");
+  const plane = input.value.trim();
+  if (plane.length < 2 || plane.length > 60) {
+    showMessage($("#post-message"), "Plane names must be 2–60 characters.", false);
+    input.focus();
+    return;
+  }
+  if (selectedPlanes.length >= 8) {
+    showMessage($("#post-message"), "You can add up to eight planes to one post.", false);
+    return;
+  }
+  if (selectedPlanes.some(function (item) { return item.toLowerCase() === plane.toLowerCase(); })) {
+    showMessage($("#post-message"), "That plane is already selected.", false);
+    input.value = "";
+    return;
+  }
+  selectedPlanes.push(plane);
+  input.value = "";
+  renderSelectedPlanes();
+  showMessage($("#post-message"), "", false);
+}
+
+function clearPhoto() {
+  selectedPhotoBase64 = "";
+  $("#post-photo").value = "";
+  $("#photo-preview-wrap").hidden = true;
+  $("#photo-drop").hidden = false;
+  $("#photo-preview").removeAttribute("src");
+  $("#photo-file-name").textContent = "";
+}
+
+function waitForImage(url) {
+  return new Promise(function (resolve, reject) {
+    const image = new Image();
+    image.onload = function () { resolve(image); };
+    image.onerror = function () { reject(new Error("That image could not be opened. Please choose another photo.")); };
+    image.src = url;
+  });
+}
+
+async function compressPhoto(file) {
+  if (!file || !file.type || !file.type.startsWith("image/")) {
+    throw new Error("Please choose an image file.");
+  }
+  if (file.size > 12 * 1024 * 1024) {
+    throw new Error("Please choose a photo smaller than 12 MB.");
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await waitForImage(objectUrl);
+    const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
+    const scale = Math.min(1, 1200 / longestSide);
+    let width = Math.max(1, Math.round(image.naturalWidth * scale));
+    let height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Your browser could not prepare this photo.");
+
+    function drawAndEncode(quality) {
+      canvas.width = width;
+      canvas.height = height;
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+      return canvas.toDataURL("image/jpeg", quality).split(",")[1];
+    }
+
+    let base64 = drawAndEncode(0.72);
+    if (base64.length > 440000) base64 = drawAndEncode(0.58);
+    if (base64.length > 440000) {
+      const scaleDown = Math.min(1, 900 / Math.max(width, height));
+      width = Math.max(1, Math.round(width * scaleDown));
+      height = Math.max(1, Math.round(height * scaleDown));
+      base64 = drawAndEncode(0.52);
+    }
+    if (base64.length > 440000) {
+      throw new Error("This photo is still too large after resizing. Please choose a smaller image.");
+    }
+    return { base64: base64, preview: "data:image/jpeg;base64," + base64 };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function handlePhotoSelection(file) {
+  if (!file) return;
+  showMessage($("#photo-message"), "Preparing photo…", false);
+  try {
+    const result = await compressPhoto(file);
+    selectedPhotoBase64 = result.base64;
+    $("#photo-preview").src = result.preview;
+    $("#photo-file-name").textContent = file.name || "Photo ready";
+    $("#photo-preview-wrap").hidden = false;
+    $("#photo-drop").hidden = true;
+    showMessage($("#photo-message"), "Photo ready to upload.", true);
+  } catch (error) {
+    clearPhoto();
+    showMessage($("#photo-message"), error.message, false);
+  }
+}
+
+async function refreshMyStats() {
+  try {
+    const dashboard = await api("/api/dashboard");
+    $("#stat-posts").textContent = String(dashboard.totalPosts);
+    $("#stat-days").textContent = String(dashboard.flyingDays);
+    $("#stat-planes").textContent = String(dashboard.uniquePlanes);
+    updatePlaneSuggestions(dashboard.knownPlanes || []);
+  } catch (_error) {
+    // The view will show an error when its main feed request is made.
+  }
 }
 
 async function checkSession() {
   try {
     const result = await api("/api/me");
-    if (result.user) await loadDashboard();
-    else showSignedOut();
+    if (result.user) {
+      showSignedIn(result.user);
+      await refreshMyStats();
+      switchView("feed");
+      await loadFeed(false);
+    } else {
+      showSignedOut();
+    }
   } catch (error) {
     showSignedOut();
     showMessage($("#auth-message"), error.message, false);
@@ -142,11 +425,15 @@ $("#auth-form").addEventListener("submit", async function (event) {
   showMessage(message, "", false);
   setBusy(button, true, authMode === "register" ? "Creating..." : "Signing in...");
   try {
-    await api(authMode === "register" ? "/api/auth/register" : "/api/auth/login", {
+    const path = authMode === "register" ? "/api/auth/register" : "/api/auth/login";
+    await api(path, {
       method: "POST",
-      body: { username: $("#auth-username").value.trim(), password: $("#auth-password").value }
+      body: {
+        username: $("#auth-username").value.trim(),
+        password: $("#auth-password").value
+      }
     });
-    await loadDashboard();
+    await checkSession();
   } catch (error) {
     showMessage(message, error.message, false);
   } finally {
@@ -156,52 +443,107 @@ $("#auth-form").addEventListener("submit", async function (event) {
 
 $("#logout-button").addEventListener("click", async function () {
   try { await api("/api/auth/logout", { method: "POST", body: {} }); } catch (_error) {}
+  feedState = { posts: [], hasMore: false, nextCursor: null, loading: false };
+  clearPhoto();
+  selectedPlanes = [];
   showSignedOut();
 });
 
-$("#flight-form").addEventListener("submit", async function (event) {
+$("#feed-tab").addEventListener("click", function () { switchView("feed"); });
+$("#my-logs-tab").addEventListener("click", function () { switchView("mine"); });
+$("#log-flight-button").addEventListener("click", function () { switchView("log"); });
+$("#log-flight-button-secondary").addEventListener("click", function () { switchView("log"); });
+$("#back-to-feed-button").addEventListener("click", function () { switchView("feed"); });
+
+$("#flying-spot").addEventListener("change", function () {
+  const isOther = this.value === "other";
+  $("#other-spot-field").hidden = !isOther;
+  $("#other-spot").required = isOther;
+  if (!isOther) $("#other-spot").value = "";
+});
+
+$("#add-plane-button").addEventListener("click", addPlane);
+$("#plane-input").addEventListener("keydown", function (event) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    addPlane();
+  }
+});
+
+$("#selected-planes").addEventListener("click", function (event) {
+  const button = event.target.closest("[data-remove-plane]");
+  if (!button) return;
+  const index = Number(button.getAttribute("data-remove-plane"));
+  if (Number.isInteger(index) && index >= 0 && index < selectedPlanes.length) {
+    selectedPlanes.splice(index, 1);
+    renderSelectedPlanes();
+  }
+});
+
+$("#post-photo").addEventListener("change", function () {
+  handlePhotoSelection(this.files && this.files[0]);
+});
+$("#remove-photo-button").addEventListener("click", function () {
+  clearPhoto();
+  showMessage($("#photo-message"), "Photo removed. Choose another photo to continue.", false);
+});
+
+$("#post-form").addEventListener("submit", async function (event) {
   event.preventDefault();
-  const button = event.currentTarget.querySelector('button[type="submit"]');
-  const message = $("#flight-message");
-  showMessage(message, "", false);
-  setBusy(button, true, "Saving...");
+  const button = $("#publish-post-button");
+  showMessage($("#post-message"), "", false);
+
+  if (!selectedPlanes.length) {
+    showMessage($("#post-message"), "Please add at least one plane.", false);
+    $("#plane-input").focus();
+    return;
+  }
+  if (!selectedPhotoBase64) {
+    showMessage($("#post-message"), "Please upload a photo of your RC plane at the flying spot.", false);
+    $("#post-photo").click();
+    return;
+  }
+
+  setBusy(button, true, "Publishing...");
   try {
-    await api("/api/flights", {
+    await api("/api/posts", {
       method: "POST",
       body: {
-        flightDate: $("#flight-date").value,
-        aircraft: $("#flight-aircraft").value,
-        durationMinutes: Number($("#flight-duration").value),
-        notes: $("#flight-notes").value
+        flightDate: $("#post-flight-date").value,
+        spot: $("#flying-spot").value,
+        otherSpot: $("#other-spot").value.trim(),
+        planes: selectedPlanes.slice(),
+        description: $("#post-description").value.trim(),
+        photoMime: "image/jpeg",
+        photoBase64: selectedPhotoBase64
       }
     });
+
     event.currentTarget.reset();
-    $("#flight-date").value = localDate();
-    showMessage(message, "Flight saved.", true);
-    await loadDashboard();
-    toast("Flight added to your journal.");
+    selectedPlanes = [];
+    renderSelectedPlanes();
+    clearPhoto();
+    $("#other-spot-field").hidden = true;
+    $("#other-spot").required = false;
+    $("#post-flight-date").value = localDate();
+    await refreshMyStats();
+    feedState = { posts: [], hasMore: false, nextCursor: null, loading: false };
+    switchView("feed");
+    await loadFeed(false);
+    toast("Your flight log has been posted.");
   } catch (error) {
-    showMessage(message, error.message, false);
+    showMessage($("#post-message"), error.message, false);
   } finally {
     setBusy(button, false);
   }
 });
 
-$("#flight-list").addEventListener("click", async function (event) {
-  const button = event.target.closest("[data-delete-flight]");
-  if (!button) return;
-  const id = button.getAttribute("data-delete-flight");
-  if (!window.confirm("Delete this flight from your journal?")) return;
-  button.disabled = true;
-  try {
-    await api("/api/flights/" + encodeURIComponent(id), { method: "DELETE" });
-    await loadDashboard();
-    toast("Flight deleted.");
-  } catch (error) {
-    button.disabled = false;
-    toast(error.message);
+$("#load-older-button").addEventListener("click", function () { loadFeed(true); });
+$("#feed-scroller").addEventListener("scroll", function () {
+  if (this.scrollTop < 100 && feedState.hasMore && !feedState.loading) {
+    loadFeed(true);
   }
 });
 
-$("#flight-date").value = localDate();
+$("#post-flight-date").value = localDate();
 checkSession();
