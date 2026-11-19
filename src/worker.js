@@ -478,7 +478,7 @@ async function handleUpdateSettings(request, env, user) {
     return errorResponse("Please choose a smaller profile picture (maximum about 110 KB after compression).");
   }
 
-  if (newUsername.toLowerCase() !== user.username.toLowerCase()) {
+  if (newUsername !== user.username) {
     try {
       await env.DB.prepare("UPDATE users SET username = ? WHERE id = ?")
         .bind(newUsername, user.id).run();
