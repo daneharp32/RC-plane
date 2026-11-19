@@ -19,50 +19,58 @@ Photo uploads and password recovery are not included yet. Because accounts do no
 
 ## Cloudflare setup
 
-The repository is configured for a Worker named rc-plane. If your existing Worker has a different name in Cloudflare, change the name field in wrangler.jsonc to match it.
+The repository is configured for a Worker named `rc-plane`. The D1 database ID supplied for this project is already entered in `wrangler.jsonc`. The database binding is named `DB` and the database name is `rc-plane-tracker`.
 
-### 1. Create the D1 database
+### 1. Check the Worker Build settings
 
-In the Cloudflare dashboard, open **Storage & databases → D1 SQL Database** and create a database named **rc-plane-tracker**.
+In the Cloudflare dashboard, open your **Worker → Settings → Build** (or **Builds → Build configuration**) and check:
 
-Copy its database ID. Alternatively, from a local terminal with Wrangler installed, run:
+- **Root directory:** leave it blank / repository root. The `wrangler.jsonc` file is at the repository root.
+- **Build command:** leave blank; this app does not need a frontend build step.
+- **Deploy command:** set to `npm run deploy`.
 
-    npm install
-    npx wrangler d1 create rc-plane-tracker
+Do not configure this repository as a Pages static-site build. It is a Worker with static assets and an API. The deploy script explicitly points Wrangler at `wrangler.jsonc` and `./public/`, where the HTML, CSS, and browser JavaScript files live.
 
-### 2. Connect the database to the Worker
+The Worker name in `wrangler.jsonc` is `rc-plane`; it must match the Worker connected to this GitHub repository.
 
-Open wrangler.jsonc and replace **REPLACE_WITH_YOUR_D1_DATABASE_ID** with the database ID Cloudflare provided. The binding name must remain **DB**.
+### 2. Apply the D1 database migration
 
-### 3. Apply the database migration
+After confirming the D1 database exists with ID `51706583-1523-46a5-9116-58cc3f44be6d`, apply the schema once.
 
 From a terminal in the repository, run:
 
     npm install
-    npx wrangler d1 migrations apply rc-plane-tracker --remote
+    npx wrangler d1 migrations apply rc-plane-tracker --remote --config ./wrangler.jsonc
 
-This creates the accounts, sessions, flights, and rate-limit tables.
+Alternatively, open the D1 database's **Console** in Cloudflare and run the SQL in `migrations/0001_initial.sql`.
 
-Alternatively, open the D1 database's **Console** in Cloudflare and run the SQL in migrations/0001_initial.sql.
+The migration creates the accounts, sessions, flights, and rate-limit tables.
 
-### 4. Deploy
+### 3. Deploy
 
-Commit and push the repository to GitHub. Your connected Cloudflare Worker should build from the repository. If you deploy from a local terminal, run:
+Push the repository to GitHub. With the Worker Build settings above, the connected Cloudflare deployment runs the `deploy` script:
 
     npm run deploy
 
-The Worker needs the D1 binding named **DB**. The static front end is served from public/ and API requests are routed through src/worker.js.
+For a local deployment from a terminal, first authenticate Wrangler with your Cloudflare account, then run the same command.
+
+### 4. Verify the app
+
+After a successful deployment, open the Worker URL and try creating an account. The app should let you sign in, add a flight record, view your personal statistics, and delete your own flight entries.
+
+The API health endpoint is:
+
+    /api/health
+
+It should return a JSON response indicating that the D1 database is connected. If it reports that the tables are not ready, apply the migration from step 2.
 
 ## Local development
 
     npm install
+    npm run db:migrate:local
     npm run dev
 
-For local development, Wrangler uses a local D1 database. Apply migrations locally with:
-
-    npm run db:migrate:local
-
-The local database is separate from the remote production database.
+The local D1 database is separate from the remote production database.
 
 ## API overview
 
@@ -79,4 +87,4 @@ The local database is separate from the remote production database.
 
 Passwords are never saved in plain text. The Worker uses PBKDF2-HMAC-SHA256 with 600,000 iterations and a random 16-byte salt. Session identifiers are random and only their SHA-256 hashes are stored in D1. Session cookies are HTTP-only, Secure, and SameSite=Strict.
 
-The D1 binding must be configured before account features work. Do not place database credentials, private keys, or other secrets in front-end files or commit them to GitHub.
+Do not put passwords, API tokens, or other secrets in the repository. The D1 database ID is an identifier, not a database password.
