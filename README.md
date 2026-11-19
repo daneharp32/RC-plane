@@ -1,8 +1,6 @@
 # RC Plane Flight Journal
 
-A private RC-plane flight logging app built for Cloudflare Workers and Cloudflare D1. It does not use Supabase.
-
-This first version is a personal journal rather than a weekly flying challenge. It deliberately has no required flying quotas, missed-week penalties, streaks, or participant rankings. Never fly just to fill in a log or meet a target; follow local field rules and suitable conditions.
+A private, group-based RC-plane flight journal built for Cloudflare Workers and Cloudflare D1. It does not use Supabase.
 
 ## Included
 
@@ -10,59 +8,45 @@ This first version is a personal journal rather than a weekly flying challenge. 
 - PBKDF2-HMAC-SHA256 password hashing with a per-user random salt.
 - Hashed, HTTP-only, Secure, SameSite session cookies.
 - Server-side authorization and same-origin checks for write requests.
-- Basic registration and sign-in rate limits.
-- Flight logging with date, aircraft, duration, and notes.
-- Personal flight history and total flight statistics.
-- Owner-only flight deletion.
+- Login rate limiting.
+- Flight-post composer with flying spot, one or more aircraft, completed flight date, required plane photo, and optional description.
+- Community feed visible to signed-in users, with newest posts at the bottom and older posts loaded when scrolling upward.
+- Personal flight-log view with totals and aircraft suggestions.
+- Owner-specific account data and server-side validation.
 
-Photo uploads and password recovery are not included yet. Because accounts do not use email addresses, a lost password cannot currently be reset from the app.
+The five built-in flying spots are Chill Guy, Unc Road, Sports Park, Shore Cliffs, and Other. Selecting Other requires a general place description. Please do not enter home or school addresses or other private location details.
+
+Photo files are resized in the browser to JPEG before upload and are stored with the post in D1 for this starter version. The maximum compressed image size is about 320 KB. R2 object storage can replace this approach later if the group needs larger images or a larger archive.
+
+Photo uploads are mandatory for posts. Upload a photo of the RC aircraft from the completed session, and avoid photos showing other people's faces, vehicle plates, or private information. The journal is for recording flights that have already happened; it does not set flying quotas or streak goals. Follow local field rules and suitable conditions.
+
+Password recovery is not included yet. Because accounts do not use email addresses, a lost password currently cannot be reset from the app.
 
 ## Cloudflare setup
 
-The repository is configured for a Worker named `rc-plane`. The D1 database ID supplied for this project is already entered in `wrangler.jsonc`. The database binding is named `DB` and the database name is `rc-plane-tracker`.
+The repository is configured for the existing Worker named \`flyers\`. The D1 binding is named \`DB\`, and it points to the database \`rc-plane-tracker\`.
 
-### 1. Check the Worker Build settings
+The Worker creates the \`flight_posts\` table and its indexes automatically the first time the updated API is used. It also includes the repeatable SQL in \`migrations/0002_flight_posts.sql\` for reference and future migration-based setup. No manual database-console step should be needed for this new table.
 
-In the Cloudflare dashboard, open your **Worker → Settings → Build** (or **Builds → Build configuration**) and check:
+### Worker build settings
 
-- **Root directory:** leave it blank / repository root. The `wrangler.jsonc` file is at the repository root.
-- **Build command:** leave blank; this app does not need a frontend build step.
-- **Deploy command:** set to `npm run deploy`.
+In the Cloudflare dashboard, open **Flyers → Settings → Build** (or **Builds → Build configuration**) and use:
 
-Do not configure this repository as a Pages static-site build. It is a Worker with static assets and an API. The deploy script explicitly points Wrangler at `wrangler.jsonc` and `./public/`, where the HTML, CSS, and browser JavaScript files live.
+- **Root directory:** repository root / blank.
+- **Build command:** blank.
+- **Deploy command:** \`npm run deploy\`.
 
-The Worker name in `wrangler.jsonc` is `rc-plane`; it must match the Worker connected to this GitHub repository.
+Do not configure this repository as a Pages static-site build. It is a Worker with static assets and an API. Wrangler is configured in \`wrangler.jsonc\` and serves browser files from \`public/\`.
 
-### 2. Apply the D1 database migration
+### Deploy
 
-After confirming the D1 database exists with ID `51706583-1523-46a5-9116-58cc3f44be6d`, apply the schema once.
+Push to GitHub. Your connected Cloudflare Worker should start a new deployment. When it succeeds, open the Worker URL.
 
-From a terminal in the repository, run:
-
-    npm install
-    npx wrangler d1 migrations apply rc-plane-tracker --remote --config ./wrangler.jsonc
-
-Alternatively, open the D1 database's **Console** in Cloudflare and run the SQL in `migrations/0001_initial.sql`.
-
-The migration creates the accounts, sessions, flights, and rate-limit tables.
-
-### 3. Deploy
-
-Push the repository to GitHub. With the Worker Build settings above, the connected Cloudflare deployment runs the `deploy` script:
-
-    npm run deploy
-
-For a local deployment from a terminal, first authenticate Wrangler with your Cloudflare account, then run the same command.
-
-### 4. Verify the app
-
-After a successful deployment, open the Worker URL and try creating an account. The app should let you sign in, add a flight record, view your personal statistics, and delete your own flight entries.
-
-The API health endpoint is:
+The health endpoint is:
 
     /api/health
 
-It should return a JSON response indicating that the D1 database is connected. If it reports that the tables are not ready, apply the migration from step 2.
+It should return JSON indicating that D1 is connected and the schema is ready.
 
 ## Local development
 
@@ -74,17 +58,19 @@ The local D1 database is separate from the remote production database.
 
 ## API overview
 
-- POST /api/auth/register
-- POST /api/auth/login
-- POST /api/auth/logout
-- GET /api/me
-- GET /api/dashboard
-- POST /api/flights
-- DELETE /api/flights/:id
-- GET /api/health
+- POST \`/api/auth/register\`
+- POST \`/api/auth/login\`
+- POST \`/api/auth/logout\`
+- GET \`/api/me\`
+- GET \`/api/dashboard\`
+- POST \`/api/posts\`
+- GET \`/api/feed\`
+- GET \`/api/health\`
 
 ## Security notes
 
-Passwords are never saved in plain text. The Worker uses PBKDF2-HMAC-SHA256 with 100,000 iterations and a random 16-byte salt. Cloudflare Workers currently rejects PBKDF2 work factors above 100,000. Session identifiers are random and only their SHA-256 hashes are stored in D1. Session cookies are HTTP-only, Secure, and SameSite=Strict.
+Passwords are never saved in plain text. The Worker uses PBKDF2-HMAC-SHA256 with 100,000 iterations and a random 16-byte salt. Session identifiers are random and only their SHA-256 hashes are stored in D1. Session cookies are HTTP-only, Secure, and SameSite=Strict.
+
+All post and feed requests require a valid signed-in session. The feed does not expose email addresses, password data, or private account identifiers. The flying spot field uses named locations rather than GPS coordinates.
 
 Do not put passwords, API tokens, or other secrets in the repository. The D1 database ID is an identifier, not a database password.
