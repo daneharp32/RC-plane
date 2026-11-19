@@ -17,6 +17,7 @@
         <span class="brand-copy"><strong>RC PLANE</strong><small>FLIGHT JOURNAL</small></span>
       </a>
       <div id="account-area" class="account-area" hidden>
+        <span id="topbar-avatar" class="topbar-avatar" aria-hidden="true">?</span>
         <span id="account-name" class="account-name"></span>
         <button id="logout-button" class="button button-quiet button-small" type="button">Sign out</button>
       </div>
@@ -76,7 +77,10 @@
 
         <nav class="app-nav" aria-label="Flight journal sections">
           <button id="feed-tab" class="nav-tab active" type="button" aria-current="page">Community feed</button>
+          <button id="participants-tab" class="nav-tab" type="button">Participants</button>
+          <button id="hangar-tab" class="nav-tab" type="button">Hangar</button>
           <button id="my-logs-tab" class="nav-tab" type="button">My flight logs</button>
+          <button id="settings-tab" class="nav-tab" type="button">Settings</button>
           <button id="admin-tab" class="nav-tab" type="button" hidden>Admin</button>
         </nav>
 
@@ -216,6 +220,103 @@
           </form>
         </section>
 
+
+        <section id="participants-view" class="view-section" hidden>
+          <div class="feed-intro">
+            <div>
+              <p class="eyebrow">THE GROUP</p>
+              <h2>Participants</h2>
+              <p class="muted">Meet everyone in the group, see their logged challenge weeks, and browse the aircraft in their Hangars.</p>
+            </div>
+            <span id="participants-count" class="admin-count">0</span>
+          </div>
+          <p class="participants-note">A week is counted when at least one completed session was logged during that seven-day challenge week. This is just a record of posts, not a participation requirement.</p>
+          <div id="participants-list" class="participants-grid">
+            <p class="muted">Loading participants…</p>
+          </div>
+          <p id="participants-message" class="form-message" role="status" aria-live="polite"></p>
+        </section>
+
+        <section id="hangar-view" class="view-section hangar-view" hidden>
+          <div class="feed-intro">
+            <div>
+              <p class="eyebrow">AIRCRAFT COLLECTION</p>
+              <h2 id="hangar-title">Hangar</h2>
+              <p id="hangar-subtitle" class="muted">Your personal list of RC aircraft.</p>
+            </div>
+            <button id="hangar-back-button" class="button button-quiet button-small" type="button" hidden>← Participants</button>
+          </div>
+          <section id="hangar-add-panel" class="panel hangar-add-panel">
+            <h3>Add an aircraft</h3>
+            <p class="muted">List a plane you own. A photo is optional.</p>
+            <form id="hangar-form">
+              <label class="field">
+                <span>Aircraft name</span>
+                <input id="hangar-plane-name" type="text" minlength="2" maxlength="60" placeholder="e.g. Apprentice STS" required>
+              </label>
+              <label class="field">
+                <span>Details <small class="optional-label">Optional</small></span>
+                <textarea id="hangar-plane-description" rows="2" maxlength="300" placeholder="Model, setup, or other details…"></textarea>
+              </label>
+              <div class="field photo-field">
+                <span>Aircraft photo <small class="optional-label">Optional</small></span>
+                <label for="hangar-photo" class="photo-drop hangar-photo-drop">
+                  <span class="photo-icon">↑</span>
+                  <strong>Choose a photo</strong>
+                  <small>From your camera roll or files</small>
+                  <span class="button button-quiet photo-choose-button">Choose photo</span>
+                </label>
+                <input id="hangar-photo" type="file" accept="image/*" hidden>
+                <div id="hangar-photo-preview-wrap" class="photo-preview-wrap" hidden>
+                  <img id="hangar-photo-preview" alt="Aircraft photo preview">
+                  <div class="photo-preview-caption">
+                    <span id="hangar-photo-caption">Photo selected</span>
+                    <button id="hangar-remove-photo-button" class="text-button" type="button">Remove</button>
+                  </div>
+                </div>
+                <p id="hangar-photo-message" class="form-message" role="status" aria-live="polite"></p>
+              </div>
+              <div class="hangar-form-footer">
+                <p id="hangar-form-message" class="form-message" role="status" aria-live="polite"></p>
+                <button id="hangar-save-button" class="button button-primary" type="submit">Add to Hangar</button>
+              </div>
+            </form>
+          </section>
+          <div id="hangar-list" class="hangar-grid">
+            <p class="muted">Loading Hangar…</p>
+          </div>
+          <p id="hangar-message" class="form-message" role="status" aria-live="polite"></p>
+        </section>
+
+        <section id="settings-view" class="view-section settings-view" hidden>
+          <div class="log-view-heading">
+            <p class="eyebrow">YOUR ACCOUNT</p>
+            <h2>Settings</h2>
+            <p class="muted">Update your profile picture and the username shown to your group.</p>
+          </div>
+          <section class="panel settings-panel">
+            <form id="settings-form">
+              <div class="settings-avatar-row">
+                <span id="settings-avatar-preview" class="settings-avatar" aria-hidden="true">?</span>
+                <div>
+                  <strong>Profile picture</strong>
+                  <p class="muted">Choose a photo from your camera roll. This is optional.</p>
+                  <label for="settings-avatar-file" class="button button-quiet button-small">Choose picture</label>
+                  <input id="settings-avatar-file" type="file" accept="image/*" hidden>
+                  <button id="settings-avatar-remove" class="text-button" type="button">Remove picture</button>
+                  <p id="settings-avatar-message" class="form-message" role="status" aria-live="polite"></p>
+                </div>
+              </div>
+              <label class="field settings-username-field">
+                <span>Username</span>
+                <input id="settings-username" type="text" minlength="3" maxlength="20" autocomplete="username" required>
+                <small>3–20 letters, numbers, or underscores. Your existing flight logs and Hangar stay with your account.</small>
+              </label>
+              <p id="settings-message" class="form-message" role="status" aria-live="polite"></p>
+              <button id="settings-save-button" class="button button-primary" type="submit">Save changes</button>
+            </form>
+          </section>
+        </section>
         <section id="admin-view" class="view-section admin-view" hidden>
           <div class="feed-intro">
             <div>
