@@ -376,14 +376,50 @@ function renderAdminOverview(data) {
 }
 
 async function loadAdminPanel() {
-  if (!currentUser || !currentUser.isAdmin) return;
-  showMessage($("#admin-message"), "", false);
+  if (!currentUser) return;
+  showMessage($("#admin-message"), "Checking administrator access…", false);
   try {
+    // Refresh the session identity from the Worker before loading protected data.
+    const session = await api("/api/me");
+    if (!session.user) {
+      showSignedOut();
+      showMessage($("#auth-message"), "Your session expired. Please sign in again.", false);
+      return;
+    }
+
+    currentUser = session.user;
+    $("#account-name").textContent = currentUser.username;
+    $("#welcome-name").textContent = currentUser.username;
+    $("#admin-tab").hidden = !currentUser.isAdmin;
+
+    if (!currentUser.isAdmin) {
+      $("#admin-view").hidden = true;
+      switchView("feed");
+      showMessage(
+        $("#feed-message"),
+        'The server sees your username as "' + currentUser.username +
+        '". Administrator access requires the username to contain "Dane".',
+        false
+      );
+      return;
+    }
+
     const data = await api("/api/admin/overview");
     renderAdminOverview(data);
+    showMessage($("#admin-message"), "", false);
     await loadChallengeBanner();
   } catch (error) {
-    showMessage($("#admin-message"), error.message, false);
+    const message = error && error.message ? error.message : "The administrator dashboard could not be loaded.";
+    showMessage($("#admin-message"), message, false);
+    if (message.toLowerCase().includes("administrator") && message.toLowerCase().includes("username")) {
+      try {
+        const session = await api("/api/me");
+        if (session.user) {
+          currentUser = session.user;
+          $("#admin-tab").hidden = !currentUser.isAdmin;
+        }
+      } catch (_sessionError) {}
+    }
   }
 }
 
