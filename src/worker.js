@@ -184,41 +184,56 @@ async function createSessionResponse(db, user) {
 }
 
 async function handleRegister(request, env) {
-  const limit = await consumeRateLimit(
-    env.DB,
-    await requestRateKey(request, "register"),
-    5,
-    60 * 60 * 1000
-  );
-  if (!limit.allowed) {
-    return errorResponse("Too many registration attempts. Please try again later.", 429, {
-      "Retry-After": String(limit.retryAfter)
-    });
-  }
-
-  const body = await readJson(request);
-  const username = typeof body.username === "string" ? body.username.trim() : "";
-  const password = typeof body.password === "string" ? body.password : "";
-  if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) {
-    return errorResponse("Usernames must be 3–20 characters and use only letters, numbers, or underscores.");
-  }
-  if (password.length < 6 || password.length > 128) {
-    return errorResponse("Passwords must be at least 6 characters and no more than 128 characters.");
-  }
-
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const user = { id: randomId(), username: username };
-  const passwordHash = await hashPassword(password, salt);
+  let stage = "rate-limit check";
   try {
-    await env.DB.prepare(
-      "INSERT INTO users (id, username, password_salt, password_hash, created_at) VALUES (?, ?, ?, ?, ?)"
-    ).bind(user.id, user.username, base64Url(salt), passwordHash, new Date().toISOString()).run();
-  } catch (_error) {
-    return errorResponse("That username is already taken. Please choose another.", 409);
-  }
-  return createSessionResponse(env.DB, user);
-}
+    const limit = await consumeRateLimit(
+      env.DB,
+      await requestRateKey(request, "register"),
+      5,
+      60 * 60 * 1000
+    );
+    if (!limit.allowed) {
+      return errorResponse("Too many registration attempts. Please try again later.", 429, {
+        "Retry-After": String(limit.retryAfter)
+      });
+    }
 
+    stage = "read registration details";
+    const body = await readJson(request);
+    const username = typeof body.username === "string" ? body.username.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) {
+      return errorResponse("Usernames must be 3–20 characters and use only letters, numbers, or underscores.");
+    }
+    if (password.length < 6 || password.length > 128) {
+      return errorResponse("Passwords must be at least 6 characters and no more than 128 characters.");
+    }
+
+    stage = "password hashing";
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const user = { id: randomId(), username: username };
+    const passwordHash = await hashPassword(password, salt);
+
+    stage = "save account";
+    try {
+      await env.DB.prepare(
+        "INSERT INTO users (id, username, password_salt, password_hash, created_at) VALUES (?, ?, ?, ?, ?)"
+      ).bind(user.id, user.username, base64Url(salt), passwordHash, new Date().toISOString()).run();
+    } catch (error) {
+      const message = error && error.message ? error.message : "";
+      if (message.toLowerCase().includes("unique") || message.toLowerCase().includes("constraint")) {
+        return errorResponse("That username is already taken. Please choose another.", 409);
+      }
+      throw error;
+    }
+
+    stage = "create login session";
+    return await createSessionResponse(env.DB, user);
+  } catch (error) {
+    console.error("Registration failed during " + stage + ":", error && error.message ? error.message : "unknown error");
+    return errorResponse("Registration failed during " + stage + ". Please try again. If it keeps happening, send this message to support.", 500);
+  }
+}
 async function handleLogin(request, env) {
   const limit = await consumeRateLimit(
     env.DB,
