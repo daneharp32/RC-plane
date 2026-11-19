@@ -4,11 +4,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --config ./wrangler.jsonc",
+    "deploy": "wrangler deploy --config ./wrangler.jsonc --assets ./public/",
     "db:create": "wrangler d1 create rc-plane-tracker",
-    "db:migrate": "wrangler d1 migrations apply rc-plane-tracker --remote",
-    "db:migrate:local": "wrangler d1 migrations apply rc-plane-tracker --local"
+    "db:migrate": "wrangler d1 migrations apply rc-plane-tracker --remote --config ./wrangler.jsonc",
+    "db:migrate:local": "wrangler d1 migrations apply rc-plane-tracker --local --config ./wrangler.jsonc"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
