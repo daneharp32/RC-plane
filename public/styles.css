@@ -318,3 +318,180 @@ main { min-height: calc(100vh - 140px); padding: 40px 0 64px; }
 }
 
 .avatar img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+
+
+/* Top-right aircraft photo: the radial mask softly dissolves the edges into the page. */
+.topbar { position: relative; min-height: 104px; overflow: visible; }
+.brand, .account-area, .theme-toggle { position: relative; z-index: 2; }
+.topbar-plane-image {
+  position: absolute;
+  z-index: 1;
+  top: -25px;
+  right: 112px;
+  width: 310px;
+  height: 139px;
+  object-fit: cover;
+  object-position: center;
+  opacity: .88;
+  pointer-events: none;
+  -webkit-mask-image: radial-gradient(ellipse 78% 76% at 62% 49%, #000 34%, rgba(0,0,0,.86) 55%, rgba(0,0,0,.32) 77%, transparent 100%);
+  mask-image: radial-gradient(ellipse 78% 76% at 62% 49%, #000 34%, rgba(0,0,0,.86) 55%, rgba(0,0,0,.32) 77%, transparent 100%);
+}
+.theme-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 35px;
+  margin-left: 12px;
+  padding: 0 12px;
+  border: 1px solid #dce4e9;
+  border-radius: 22px;
+  background: rgba(255,255,255,.88);
+  color: #425563;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+  backdrop-filter: blur(8px);
+}
+.theme-toggle:hover { background: #fff; border-color: #b9cbd6; }
+.theme-toggle span:first-child { font-size: 15px; line-height: 1; }
+
+/* Dark palette and surfaces. */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #e5edf2;
+  --muted: #a0afba;
+  --line: #344653;
+  --panel: #1b2a35;
+  --canvas: #111b24;
+  --navy: #e4edf3;
+  --blue: #78bce8;
+  --blue-soft: #233b4a;
+  --green: #78c99d;
+  --green-soft: #203c32;
+  --red: #e38e87;
+}
+html[data-theme="dark"] body { background: var(--canvas); color: var(--ink); }
+html[data-theme="dark"] .topbar { border-bottom-color: #30414d; }
+html[data-theme="dark"] .brand { color: #edf4f8; }
+html[data-theme="dark"] .brand-copy small,
+html[data-theme="dark"] .muted,
+html[data-theme="dark"] .auth-footnote,
+html[data-theme="dark"] .post-author-copy small,
+html[data-theme="dark"] .post-time,
+html[data-theme="dark"] .stat-label,
+html[data-theme="dark"] .stat-card > small,
+html[data-theme="dark"] .field-hint,
+html[data-theme="dark"] .field small,
+html[data-theme="dark"] .photo-drop small,
+html[data-theme="dark"] .photo-preview-caption,
+html[data-theme="dark"] .feed-end,
+html[data-theme="dark"] .participant-no-planes,
+html[data-theme="dark"] .participants-note { color: #9cacb7; }
+html[data-theme="dark"] .account-name { color: #d5e0e7; }
+html[data-theme="dark"] .theme-toggle {
+  border-color: #475b69;
+  background: rgba(30,45,56,.88);
+  color: #e0ebf2;
+}
+html[data-theme="dark"] .theme-toggle:hover { background: #293d4b; border-color: #668095; }
+html[data-theme="dark"] .app-nav { border-color: #344653; background: #1a2934; }
+html[data-theme="dark"] .nav-tab { color: #a7b6c0; }
+html[data-theme="dark"] .nav-tab.active { background: #314552; color: #f0f5f8; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .auth-panel,
+html[data-theme="dark"] .stat-card,
+html[data-theme="dark"] .post-card,
+html[data-theme="dark"] .participant-card,
+html[data-theme="dark"] .hangar-card,
+html[data-theme="dark"] .settings-panel,
+html[data-theme="dark"] .admin-panel { background: #1b2a35; border-color: #344653; box-shadow: 0 8px 28px rgba(0,0,0,.12); }
+html[data-theme="dark"] .auth-tabs { background: #14212b; }
+html[data-theme="dark"] .auth-tab { color: #a9b7c1; }
+html[data-theme="dark"] .auth-tab.active { background: #304450; color: #f0f5f8; box-shadow: 0 2px 7px rgba(0,0,0,.2); }
+html[data-theme="dark"] .field > span,
+html[data-theme="dark"] .plane-fieldset legend,
+html[data-theme="dark"] .admin-panel h3,
+html[data-theme="dark"] .hangar-card h3,
+html[data-theme="dark"] .settings-avatar-row strong,
+html[data-theme="dark"] .participant-name strong,
+html[data-theme="dark"] .post-author-copy strong { color: #e4edf3; }
+html[data-theme="dark"] .field input,
+html[data-theme="dark"] .field textarea,
+html[data-theme="dark"] .field select,
+html[data-theme="dark"] .add-plane-row input,
+html[data-theme="dark"] .admin-date-field input {
+  border-color: #425563;
+  background: #14212b;
+  color: #e5edf2;
+}
+html[data-theme="dark"] .field input::placeholder,
+html[data-theme="dark"] .field textarea::placeholder,
+html[data-theme="dark"] .add-plane-row input::placeholder { color: #8496a2; }
+html[data-theme="dark"] .button-quiet { border-color: #405562; background: #263945; color: #d5e1e8; }
+html[data-theme="dark"] .button-quiet:hover { background: #304956; }
+html[data-theme="dark"] .danger-button { border-color: #6b4645; color: #f0a19b; }
+html[data-theme="dark"] .danger-button:hover { background: #432d30; }
+html[data-theme="dark"] .feed-scroller { border-color: #344653; background: #15232d; }
+html[data-theme="dark"] .post-header { border-bottom-color: #344653; }
+html[data-theme="dark"] .post-body { color: #e1eaf0; }
+html[data-theme="dark"] .post-chip { background: #253d4b; color: #bad9eb; }
+html[data-theme="dark"] .post-chip.spot { background: #243d35; color: #a8d5bb; }
+html[data-theme="dark"] .post-plane { border-color: #405461; color: #d5e2e9; background: #223440; }
+html[data-theme="dark"] .avatar,
+html[data-theme="dark"] .participant-avatar,
+html[data-theme="dark"] .topbar-avatar,
+html[data-theme="dark"] .settings-avatar { background: #294556; color: #bfe1f5; }
+html[data-theme="dark"] .photo-drop,
+html[data-theme="dark"] .photo-preview-wrap { border-color: #405562; background: #172630; color: #d4e2e9; }
+html[data-theme="dark"] .photo-drop:hover { border-color: #78bce8; background: #1e3441; }
+html[data-theme="dark"] .photo-icon { background: #2b4555; color: #91c9ed; }
+html[data-theme="dark"] .photo-preview-wrap img,
+html[data-theme="dark"] .hangar-photo-wrap,
+html[data-theme="dark"] .hangar-photo-placeholder { background: #12202a; }
+html[data-theme="dark"] .photo-preview-caption { border-top-color: #344653; }
+html[data-theme="dark"] .feed-empty { border-color: #405562; color: #a3b2bc; }
+html[data-theme="dark"] .feed-empty strong { color: #e1ebf1; }
+html[data-theme="dark"] .stat-highlight { border-color: #3d596d; background: linear-gradient(145deg, #1b2a35, #1b3443); }
+html[data-theme="dark"] .challenge-banner { border-color: #354d5c; background: #1b2d38; color: #c9deea; }
+html[data-theme="dark"] .challenge-banner span { color: #a4b7c2; }
+html[data-theme="dark"] .admin-badge,
+html[data-theme="dark"] .challenge-status,
+html[data-theme="dark"] .admin-count { border-color: #405461; background: #243743; color: #c1d2dc; }
+html[data-theme="dark"] .challenge-status[data-status="active"] { border-color: #365847; background: #203d31; color: #a7d8ba; }
+html[data-theme="dark"] .challenge-status[data-status="scheduled"] { border-color: #655639; background: #3a3325; color: #e4d09a; }
+html[data-theme="dark"] .admin-list-row { border-top-color: #344653; }
+html[data-theme="dark"] .admin-list-copy strong { color: #e0eaf0; }
+html[data-theme="dark"] .admin-list-copy small { color: #9aabb6; }
+html[data-theme="dark"] .admin-protected-label { color: #8cc7a2; }
+html[data-theme="dark"] .plane-pill { border-color: #405a69; background: #243e4b; color: #c9e2ef; }
+html[data-theme="dark"] .plane-pill button { background: #385363; color: #e0edf3; }
+html[data-theme="dark"] .safety-note { border-left-color: #5c987b; background: #20372e; color: #b9d9c6; }
+html[data-theme="dark"] .footer { border-top-color: #30414d; color: #8497a3; }
+html[data-theme="dark"] .post-description,
+html[data-theme="dark"] .hangar-plane-description { color: #b7c5ce; }
+html[data-theme="dark"] .participants-note { border-color: #364b58; background: #1b2b36; }
+html[data-theme="dark"] .settings-avatar-row { border-bottom-color: #344653; }
+html[data-theme="dark"] .text-button { color: #e59b94; }
+html[data-theme="dark"] .form-message.success { color: #81cba1; }
+html[data-theme="dark"] .toast { background: #263b49; color: #f0f5f8; }
+
+@media (max-width: 720px) {
+  .topbar { min-height: 86px; }
+  .topbar-plane-image {
+    top: -3px;
+    right: 45px;
+    width: 190px;
+    height: 85px;
+    opacity: .55;
+  }
+  .theme-toggle { margin-left: 7px; padding: 0 9px; }
+  .theme-toggle span:last-child { display: none; }
+}
+@media (max-width: 390px) {
+  .topbar-plane-image { right: 35px; width: 150px; height: 67px; opacity: .42; }
+}
