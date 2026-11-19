@@ -197,3 +197,51 @@ main { min-height: calc(100vh - 140px); padding: 40px 0 64px; }
   .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .footer { flex-direction: column; gap: 7px; }
 }
+
+
+/* Optional challenge notice and private administrator tools */
+.challenge-banner { display: flex; flex-direction: column; gap: 4px; margin: -8px 0 22px; padding: 13px 16px; border: 1px solid #dce7ed; border-radius: 11px; background: #f5f9fb; color: #38576a; }
+.challenge-banner strong { font-size: 12px; }
+.challenge-banner span { color: #71818b; font-size: 11px; line-height: 1.5; }
+.admin-view { padding-bottom: 18px; }
+.admin-badge, .challenge-status, .admin-count { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; min-height: 29px; padding: 0 10px; border: 1px solid #dce6ec; border-radius: 30px; background: #f5f8fa; color: #4c6574; font-size: 10px; font-weight: 800; }
+.admin-panel { min-width: 0; padding: 21px; }
+.admin-panel h3 { margin: 0; color: var(--navy); font-size: 17px; letter-spacing: -.025em; }
+.admin-panel .muted { margin: 7px 0 0; }
+.admin-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.admin-panel-heading .eyebrow { margin: 0 0 6px; }
+.admin-challenge-panel { margin-bottom: 16px; }
+.challenge-admin-panel > .muted { margin-top: 13px; }
+.admin-challenge-actions { display: flex; align-items: flex-end; justify-content: space-between; gap: 15px; margin-top: 17px; }
+.admin-date-field { width: min(100%, 240px); margin: 0; }
+.admin-action-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.admin-management-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.admin-count { min-width: 29px; padding: 0 8px; }
+.admin-list { display: flex; flex-direction: column; gap: 9px; max-height: 580px; overflow-y: auto; margin-top: 15px; }
+.admin-list-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 0; border-top: 1px solid #edf0f2; }
+.admin-list-copy { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.admin-list-copy strong { overflow-wrap: anywhere; color: #314552; font-size: 11px; }
+.admin-list-copy small { color: #87949c; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+.admin-list-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+.admin-list .button { min-height: 31px; padding: 0 10px; font-size: 10px; }
+.danger-button { color: #a64f49; border-color: #ead8d6; }
+.danger-button:hover { background: #fff8f7; }
+.admin-protected-label { flex: 0 0 auto; color: #69816f; font-size: 9px; font-weight: 800; }
+.challenge-status[data-status="active"] { border-color: #d8e8dc; background: #f1f8f3; color: #3e7652; }
+.challenge-status[data-status="scheduled"] { border-color: #e9e3cf; background: #fbf8ee; color: #826c35; }
+.challenge-status[data-status="ended"] { background: #f4f5f6; color: #737f87; }
+
+@media (max-width: 720px) {
+  .admin-management-grid { grid-template-columns: 1fr; }
+  .admin-panel { padding: 17px; }
+  .admin-challenge-actions { align-items: stretch; flex-direction: column; }
+  .admin-date-field { width: 100%; }
+  .admin-action-buttons { justify-content: stretch; }
+  .admin-action-buttons .button { flex: 1; }
+  .challenge-banner { margin-top: -3px; }
+}
+@media (max-width: 390px) {
+  .admin-panel-heading { gap: 8px; }
+  .admin-list-row { align-items: flex-start; }
+  .admin-list-actions { flex-direction: column; align-items: flex-end; }
+}
