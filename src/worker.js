@@ -171,16 +171,27 @@ async function requireUser(request, db) {
   return { user: user };
 }
 
+function normalizeAdminUsername(value) {
+  return typeof value === "string"
+    ? value.normalize("NFKC").replace(/[\\u200B-\\u200D\\uFEFF]/g, "").trim().toLowerCase()
+    : "";
+}
+
 function isAdminUser(_env, user) {
-  return Boolean(user && typeof user.username === "string" &&
-    user.username.toLowerCase().includes("dane"));
+  return Boolean(user && normalizeAdminUsername(user.username).includes("dane"));
 }
 
 async function requireAdmin(request, env) {
   const auth = await requireUser(request, env.DB);
   if (auth.response) return auth;
   if (!isAdminUser(env, auth.user)) {
-    return { response: errorResponse("Administrator permission is required.", 403) };
+    return {
+      response: errorResponse(
+        "Administrator access denied for the signed-in username \"" +
+        auth.user.username + "\". The username must contain Dane.",
+        403
+      )
+    };
   }
   return auth;
 }
