@@ -85,6 +85,6 @@ The local D1 database is separate from the remote production database.
 
 ## Security notes
 
-Passwords are never saved in plain text. The Worker uses PBKDF2-HMAC-SHA256 with 600,000 iterations and a random 16-byte salt. Session identifiers are random and only their SHA-256 hashes are stored in D1. Session cookies are HTTP-only, Secure, and SameSite=Strict.
+Passwords are never saved in plain text. The Worker uses PBKDF2-HMAC-SHA256 with 100,000 iterations and a random 16-byte salt. Cloudflare Workers currently rejects PBKDF2 work factors above 100,000. Session identifiers are random and only their SHA-256 hashes are stored in D1. Session cookies are HTTP-only, Secure, and SameSite=Strict.
 
 Do not put passwords, API tokens, or other secrets in the repository. The D1 database ID is an identifier, not a database password.
