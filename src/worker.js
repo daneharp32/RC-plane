@@ -510,7 +510,8 @@ async function handleParticipants(env) {
     "SELECT u.id, u.username, up.avatar_base64, " +
     "(SELECT COUNT(DISTINCT CAST((julianday(p.flight_date) - julianday(cs.start_date)) / 7 AS INTEGER)) " +
     "FROM flight_posts p WHERE p.user_id = u.id AND cs.start_date IS NOT NULL " +
-    "AND p.flight_date >= cs.start_date AND (cs.end_date IS NULL OR p.flight_date <= cs.end_date)) AS weeks_completed " +
+    "AND p.flight_date >= cs.start_date AND p.flight_date <= " +
+    "CASE WHEN cs.status = 'ended' AND cs.ended_at IS NOT NULL THEN cs.ended_at ELSE cs.end_date END) AS weeks_completed " +
     "FROM users u LEFT JOIN user_profiles up ON up.user_id = u.id " +
     "LEFT JOIN challenge_settings cs ON cs.id = 1 " +
     "LEFT JOIN user_moderation m ON m.user_id = u.id " +
