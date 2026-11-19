@@ -80,12 +80,30 @@
         </div>
 
         <nav class="app-nav" aria-label="Flight journal sections">
-          <button id="feed-tab" class="nav-tab active" type="button" aria-current="page">Community feed</button>
-          <button id="participants-tab" class="nav-tab" type="button">Participants</button>
-          <button id="hangar-tab" class="nav-tab" type="button">Hangar</button>
-          <button id="my-logs-tab" class="nav-tab" type="button">My flight logs</button>
-          <button id="settings-tab" class="nav-tab" type="button">Settings</button>
-          <button id="admin-tab" class="nav-tab" type="button" hidden>Admin</button>
+          <button id="feed-tab" class="nav-tab active" type="button" aria-current="page">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3.5 10 8.5-7 8.5 7v10a1 1 0 0 1-1 1h-5.5v-7h-4v7H4.5a1 1 0 0 1-1-1z"/></svg>
+            <span>Feed</span>
+          </button>
+          <button id="participants-tab" class="nav-tab" type="button">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 20v-1.5A5.2 5.2 0 0 1 8 13.3h2a5.2 5.2 0 0 1 5.2 5.2V20zM15.5 5.3a3.1 3.1 0 0 1 0 5.9M17 13.7a4.6 4.6 0 0 1 4.2 4.6V20h-4"/></svg>
+            <span>People</span>
+          </button>
+          <button id="hangar-tab" class="nav-tab" type="button">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m2 12 20-8-7.7 18-3.2-7.2L2 12Z"/><path d="m11.1 14.8 5.1-5.1"/></svg>
+            <span>Hangar</span>
+          </button>
+          <button id="my-logs-tab" class="nav-tab" type="button">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h13M8 12h13M8 19h13"/><path d="M3 5h.01M3 12h.01M3 19h.01"/></svg>
+            <span>Logs</span>
+          </button>
+          <button id="settings-tab" class="nav-tab" type="button">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.1 1.8-1.8 3.1-2.1-.5a8 8 0 0 1-1.5.9l-.4 2.1h-3.6l-.4-2.1a8 8 0 0 1-1.5-.9l-2.1.5-1.8-3.1 1.1-1.8a8 8 0 0 1 0-1.8l-1.1-1.8 1.8-3.1 2.1.5a8 8 0 0 1 1.5-.9l.4-2.1h3.6l.4 2.1a8 8 0 0 1 1.5.9l2.1-.5 1.8 3.1-1.1 1.8a8 8 0 0 1 0 1.8Z"/></svg>
+            <span>Settings</span>
+          </button>
+          <button id="admin-tab" class="nav-tab" type="button" hidden>
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8 20 6v5.4c0 5.1-3.4 8.2-8 9.8-4.6-1.6-8-4.7-8-9.8V6z"/><path d="m8.5 12 2.2 2.2 4.8-4.8"/></svg>
+            <span>Admin</span>
+          </button>
         </nav>
 
         <aside id="challenge-banner" class="challenge-banner" hidden>
