@@ -508,7 +508,7 @@ async function handleUpdateSettings(request, env, user) {
 async function handleParticipants(env) {
   const result = await env.DB.prepare(
     "SELECT u.id, u.username, up.avatar_base64, " +
-    "(SELECT COUNT(DISTINCT CAST((julianday(p.flight_date) - julianday(cs.start_date)) / 7 AS INTEGER) " +
+    "(SELECT COUNT(DISTINCT CAST((julianday(p.flight_date) - julianday(cs.start_date)) / 7 AS INTEGER)) " +
     "FROM flight_posts p WHERE p.user_id = u.id AND cs.start_date IS NOT NULL " +
     "AND p.flight_date >= cs.start_date AND (cs.end_date IS NULL OR p.flight_date <= cs.end_date)) AS weeks_completed " +
     "FROM users u LEFT JOIN user_profiles up ON up.user_id = u.id " +
