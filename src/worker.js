@@ -30,8 +30,8 @@ function fromBase64Url(value) {
 }
 
 async function sha256(value) {
-  const result = await crypto.subtle.digest("SHA-256", encoder.encode(value));
-  return base64Url(new Uint8Array(result));
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
+  return base64Url(new Uint8Array(digest));
 }
 
 async function hashPassword(password, saltBytes) {
@@ -89,118 +89,16 @@ function isValidDate(value) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-function addDays(dateString, days) {
-  const date = new Date(dateString + "T00:00:00.000Z");
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-function todayInTimezone(timeZone) {
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: timeZone || "UTC",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    }).formatToParts(new Date());
-    const values = {};
-    for (const part of parts) values[part.type] = part.value;
-    return values.year + "-" + values.month + "-" + values.day;
-  } catch (_error) {
-    return new Date().toISOString().slice(0, 10);
-  }
-}
-
-function validateTimezone(value) {
-  if (typeof value !== "string" || value.length > 80) return false;
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
-    return true;
-  } catch (_error) {
-    return false;
-  }
-}
-
-function summarizeChallenge(settings, flights, today) {
-  const startDate = settings ? settings.start_date : null;
-  const timeZone = settings && settings.timezone ? settings.timezone : "UTC";
-  const active = Boolean(settings && settings.is_active && startDate && isValidDate(startDate));
-  const weeks = [];
-
-  if (!active) {
-    for (let i = 0; i < 52; i += 1) {
-      const start = startDate && isValidDate(startDate) ? addDays(startDate, i * 7) : null;
-      weeks.push({
-        number: i + 1,
-        startDate: start,
-        endDate: start ? addDays(start, 6) : null,
-        status: "upcoming"
-      });
-    }
-    return {
-      isConfigured: Boolean(startDate),
-      isActive: false,
-      startDate: startDate,
-      timezone: timeZone,
-      completedWeeks: 0,
-      missedWeeks: 0,
-      streak: 0,
-      currentWeek: null,
-      progressPercent: 0,
-      weeks: weeks
-    };
-  }
-
-  const endDate = addDays(startDate, 363);
-  for (let i = 0; i < 52; i += 1) {
-    const weekStart = addDays(startDate, i * 7);
-    const weekEnd = addDays(weekStart, 6);
-    const complete = flights.some(function (flight) {
-      return flight.flight_date >= weekStart && flight.flight_date <= weekEnd;
-    });
-    let status = "upcoming";
-    if (complete) status = "completed";
-    else if (today > weekEnd) status = "missed";
-    else if (today >= weekStart && today <= weekEnd) status = "current";
-    weeks.push({ number: i + 1, startDate: weekStart, endDate: weekEnd, status: status });
-  }
-
-  let currentWeek = null;
-  for (let i = 0; i < weeks.length; i += 1) {
-    if (today >= weeks[i].startDate && today <= weeks[i].endDate) {
-      currentWeek = i + 1;
-      break;
-    }
-  }
-
-  const completedWeeks = weeks.filter(function (week) {
-    return week.status === "completed";
-  }).length;
-  const missedWeeks = weeks.filter(function (week) {
-    return week.status === "missed";
-  }).length;
-
-  let anchor = currentWeek === null ? (today > endDate ? 51 : -1) : currentWeek - 1;
-  if (anchor >= 0 && weeks[anchor].status !== "completed") anchor -= 1;
-  let streak = 0;
-  while (anchor >= 0 && weeks[anchor].status === "completed") {
-    streak += 1;
-    anchor -= 1;
-  }
-
-  return {
-    isConfigured: true,
-    isActive: true,
-    startDate: startDate,
-    endDate: endDate,
-    timezone: timeZone,
-    completedWeeks: completedWeeks,
-    missedWeeks: missedWeeks,
-    streak: streak,
-    currentWeek: currentWeek,
-    progressPercent: Math.round((completedWeeks / 52) * 100),
-    weeks: weeks
-  };
+function localToday() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date());
+  const values = {};
+  for (const part of parts) values[part.type] = part.value;
+  return values.year + "-" + values.month + "-" + values.day;
 }
 
 async function readJson(request) {
@@ -235,7 +133,6 @@ async function consumeRateLimit(db, key, maxRequests, windowMs) {
     "reset_at = CASE WHEN rate_limits.reset_at <= ? THEN excluded.reset_at ELSE rate_limits.reset_at END " +
     "RETURNING request_count, reset_at"
   ).bind(key, resetAt, now, now).first();
-
   return {
     allowed: Boolean(row && row.request_count <= maxRequests),
     retryAfter: row ? Math.max(1, Math.ceil((row.reset_at - now) / 1000)) : 60
@@ -251,29 +148,17 @@ async function getSession(request, db) {
   const token = getCookie(request, SESSION_COOKIE);
   if (!token || token.length < 30 || token.length > 100) return null;
   const tokenHash = await sha256(token);
-  const now = new Date().toISOString();
   const row = await db.prepare(
-    "SELECT u.id, u.username, u.role, s.token_hash " +
-    "FROM sessions s JOIN users u ON u.id = s.user_id " +
+    "SELECT u.id, u.username FROM sessions s JOIN users u ON u.id = s.user_id " +
     "WHERE s.token_hash = ? AND s.expires_at > ?"
-  ).bind(tokenHash, now).first();
-  if (!row) return null;
-  return { id: row.id, username: row.username, role: row.role, tokenHash: tokenHash };
+  ).bind(tokenHash, new Date().toISOString()).first();
+  return row ? { id: row.id, username: row.username } : null;
 }
 
 async function requireUser(request, db) {
   const user = await getSession(request, db);
   if (!user) return { response: errorResponse("Please sign in to continue.", 401) };
   return { user: user };
-}
-
-async function requireAdmin(request, db) {
-  const result = await requireUser(request, db);
-  if (result.response) return result;
-  if (result.user.role !== "admin") {
-    return { response: errorResponse("Administrator access is required.", 403) };
-  }
-  return result;
 }
 
 async function createSessionResponse(db, user) {
@@ -285,15 +170,19 @@ async function createSessionResponse(db, user) {
     "INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)"
   ).bind(tokenHash, user.id, expiresAt, now.toISOString()).run();
   return json(
-    { user: { id: user.id, username: user.username, role: user.role } },
+    { user: { id: user.id, username: user.username } },
     200,
     { "Set-Cookie": cookieHeader(token, Math.floor(SESSION_DURATION_MS / 1000)) }
   );
 }
 
 async function handleRegister(request, env) {
-  const rateKey = await requestRateKey(request, "register");
-  const limit = await consumeRateLimit(env.DB, rateKey, 5, 60 * 60 * 1000);
+  const limit = await consumeRateLimit(
+    env.DB,
+    await requestRateKey(request, "register"),
+    5,
+    60 * 60 * 1000
+  );
   if (!limit.allowed) {
     return errorResponse("Too many registration attempts. Please try again later.", 429, {
       "Retry-After": String(limit.retryAfter)
@@ -311,12 +200,11 @@ async function handleRegister(request, env) {
   }
 
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const user = { id: randomId(), username: username, role: "participant" };
+  const user = { id: randomId(), username: username };
   const passwordHash = await hashPassword(password, salt);
   try {
     await env.DB.prepare(
-      "INSERT INTO users (id, username, password_salt, password_hash, role, created_at) " +
-      "VALUES (?, ?, ?, ?, 'participant', ?)"
+      "INSERT INTO users (id, username, password_salt, password_hash, created_at) VALUES (?, ?, ?, ?, ?)"
     ).bind(user.id, user.username, base64Url(salt), passwordHash, new Date().toISOString()).run();
   } catch (_error) {
     return errorResponse("That username is already taken. Please choose another.", 409);
@@ -325,8 +213,12 @@ async function handleRegister(request, env) {
 }
 
 async function handleLogin(request, env) {
-  const rateKey = await requestRateKey(request, "login");
-  const limit = await consumeRateLimit(env.DB, rateKey, 20, 15 * 60 * 1000);
+  const limit = await consumeRateLimit(
+    env.DB,
+    await requestRateKey(request, "login"),
+    20,
+    15 * 60 * 1000
+  );
   if (!limit.allowed) {
     return errorResponse("Too many sign-in attempts. Please try again later.", 429, {
       "Retry-After": String(limit.retryAfter)
@@ -341,48 +233,23 @@ async function handleLogin(request, env) {
   }
 
   const row = await env.DB.prepare(
-    "SELECT id, username, password_salt, password_hash, role FROM users WHERE username = ? COLLATE NOCASE"
+    "SELECT id, username, password_salt, password_hash FROM users WHERE username = ? COLLATE NOCASE"
   ).bind(username).first();
-
   const salt = row ? fromBase64Url(row.password_salt) : new Uint8Array(16);
-  const actualHash = await hashPassword(password, salt);
-  if (!row || !constantTimeEqual(actualHash, row.password_hash)) {
+  const passwordHash = await hashPassword(password, salt);
+  if (!row || !constantTimeEqual(passwordHash, row.password_hash)) {
     return errorResponse("Username or password is incorrect.", 401);
   }
-
-  return createSessionResponse(env.DB, { id: row.id, username: row.username, role: row.role });
+  return createSessionResponse(env.DB, { id: row.id, username: row.username });
 }
 
 async function handleLogout(request, env) {
   const token = getCookie(request, SESSION_COOKIE);
   if (token) {
-    const tokenHash = await sha256(token);
-    await env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(tokenHash).run();
+    await env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?")
+      .bind(await sha256(token)).run();
   }
   return json({ ok: true }, 200, { "Set-Cookie": clearCookieHeader() });
-}
-
-async function getChallengeSettings(db) {
-  return db.prepare(
-    "SELECT title, start_date, timezone, is_active, updated_at FROM challenge_settings WHERE id = 1"
-  ).first();
-}
-
-function publicSettings(row) {
-  if (!row) {
-    return {
-      title: "52-Week RC Flight Challenge",
-      startDate: null,
-      timezone: "America/Los_Angeles",
-      isActive: false
-    };
-  }
-  return {
-    title: row.title,
-    startDate: row.start_date,
-    timezone: row.timezone,
-    isActive: Boolean(row.is_active)
-  };
 }
 
 function publicFlight(row) {
@@ -397,35 +264,23 @@ function publicFlight(row) {
 }
 
 async function handleDashboard(env, user) {
-  const settingsRow = await getChallengeSettings(env.DB);
-  const settings = publicSettings(settingsRow);
-  const challengeFlightsQuery = settings.startDate
-    ? env.DB.prepare(
-      "SELECT flight_date FROM flights WHERE user_id = ? AND flight_date >= ? AND flight_date <= ?"
-    ).bind(user.id, settings.startDate, addDays(settings.startDate, 363)).all()
-    : Promise.resolve({ results: [] });
-
   const results = await Promise.all([
     env.DB.prepare(
       "SELECT id, flight_date, aircraft, duration_minutes, notes, created_at " +
-      "FROM flights WHERE user_id = ? ORDER BY flight_date DESC, created_at DESC LIMIT 30"
+      "FROM flights WHERE user_id = ? ORDER BY flight_date DESC, created_at DESC LIMIT 100"
     ).bind(user.id).all(),
-    env.DB.prepare("SELECT COUNT(*) AS total, COALESCE(SUM(duration_minutes), 0) AS minutes FROM flights WHERE user_id = ?")
-      .bind(user.id).first(),
-    challengeFlightsQuery
+    env.DB.prepare(
+      "SELECT COUNT(*) AS total, COALESCE(SUM(duration_minutes), 0) AS minutes, " +
+      "COUNT(DISTINCT flight_date) AS flying_days FROM flights WHERE user_id = ?"
+    ).bind(user.id).first()
   ]);
-
-  const recentFlights = results[0].results || [];
-  const totals = results[1] || { total: 0, minutes: 0 };
-  const today = todayInTimezone(settings.timezone);
-  const summary = summarizeChallenge(settings, results[2].results || [], today);
-
+  const totals = results[1] || { total: 0, minutes: 0, flying_days: 0 };
   return json({
-    user: { id: user.id, username: user.username, role: user.role },
-    challenge: { settings: settings, summary: summary },
-    flights: recentFlights.map(publicFlight),
+    user: { id: user.id, username: user.username },
+    flights: (results[0].results || []).map(publicFlight),
     totalFlights: totals.total || 0,
-    totalMinutes: totals.minutes || 0
+    totalMinutes: totals.minutes || 0,
+    flyingDays: totals.flying_days || 0
   });
 }
 
@@ -435,12 +290,8 @@ async function handleCreateFlight(request, env, user) {
   const aircraft = typeof body.aircraft === "string" ? body.aircraft.trim() : "";
   const duration = Number(body.durationMinutes);
   const notes = typeof body.notes === "string" ? body.notes.trim() : "";
-
   if (!isValidDate(flightDate)) return errorResponse("Please enter a valid flight date.");
-  const settings = publicSettings(await getChallengeSettings(env.DB));
-  if (flightDate > todayInTimezone(settings.timezone)) {
-    return errorResponse("A flight date cannot be in the future.");
-  }
+  if (flightDate > localToday()) return errorResponse("A flight date cannot be in the future.");
   if (aircraft.length < 2 || aircraft.length > 60) {
     return errorResponse("Aircraft name must be between 2 and 60 characters.");
   }
@@ -455,7 +306,6 @@ async function handleCreateFlight(request, env, user) {
     "INSERT INTO flights (id, user_id, flight_date, aircraft, duration_minutes, notes, created_at) " +
     "VALUES (?, ?, ?, ?, ?, ?, ?)"
   ).bind(id, user.id, flightDate, aircraft, duration, notes, createdAt).run();
-
   return json({
     flight: {
       id: id,
@@ -476,91 +326,9 @@ async function handleDeleteFlight(env, user, flightId) {
   return json({ ok: true });
 }
 
-async function handleLeaderboard(env) {
-  const [settingsRow, usersResult, flightsResult] = await Promise.all([
-    getChallengeSettings(env.DB),
-    env.DB.prepare("SELECT id, username FROM users").all(),
-    env.DB.prepare("SELECT user_id, flight_date, duration_minutes FROM flights").all()
-  ]);
-  const settings = publicSettings(settingsRow);
-  const allFlights = flightsResult.results || [];
-  const today = todayInTimezone(settings.timezone);
-  const entries = (usersResult.results || []).map(function (user) {
-    const flights = allFlights.filter(function (flight) { return flight.user_id === user.id; });
-    const summary = summarizeChallenge(settings, flights, today);
-    return {
-      username: user.username,
-      completedWeeks: summary.completedWeeks,
-      missedWeeks: summary.missedWeeks,
-      streak: summary.streak,
-      flightCount: flights.length,
-      totalMinutes: flights.reduce(function (sum, flight) { return sum + flight.duration_minutes; }, 0)
-    };
-  });
-  entries.sort(function (a, b) {
-    return b.completedWeeks - a.completedWeeks ||
-      b.streak - a.streak ||
-      b.flightCount - a.flightCount ||
-      a.username.localeCompare(b.username);
-  });
-  return json({ challenge: settings, participants: entries.length, leaderboard: entries.slice(0, 50) });
-}
-
-async function handleAdminOverview(env) {
-  const [settingsRow, usersResult, flightsResult] = await Promise.all([
-    getChallengeSettings(env.DB),
-    env.DB.prepare("SELECT id, username, role, created_at FROM users ORDER BY created_at ASC").all(),
-    env.DB.prepare("SELECT user_id, flight_date, duration_minutes FROM flights").all()
-  ]);
-  const settings = publicSettings(settingsRow);
-  const allFlights = flightsResult.results || [];
-  const today = todayInTimezone(settings.timezone);
-  const participants = (usersResult.results || []).map(function (user) {
-    const flights = allFlights.filter(function (flight) { return flight.user_id === user.id; });
-    const summary = summarizeChallenge(settings, flights, today);
-    return {
-      username: user.username,
-      role: user.role,
-      createdAt: user.created_at,
-      flightCount: flights.length,
-      completedWeeks: summary.completedWeeks,
-      missedWeeks: summary.missedWeeks,
-      streak: summary.streak
-    };
-  });
-  return json({
-    settings: settings,
-    participantCount: participants.filter(function (person) { return person.role === "participant"; }).length,
-    totalFlights: allFlights.length,
-    participants: participants
-  });
-}
-
-async function handleSaveChallenge(request, env) {
-  const body = await readJson(request);
-  const title = typeof body.title === "string" ? body.title.trim() : "";
-  const startDate = body.startDate === null || body.startDate === "" ? null : body.startDate;
-  const timezone = typeof body.timezone === "string" ? body.timezone : "";
-  const isActive = Boolean(body.isActive);
-
-  if (title.length < 3 || title.length > 80) return errorResponse("Challenge title must be between 3 and 80 characters.");
-  if (startDate !== null && !isValidDate(startDate)) return errorResponse("Please choose a valid challenge start date.");
-  if (!validateTimezone(timezone)) return errorResponse("Please enter a valid time zone, such as America/Los_Angeles.");
-  if (isActive && !startDate) return errorResponse("Choose a start date before activating the challenge.");
-
-  await env.DB.prepare(
-    "INSERT INTO challenge_settings (id, title, start_date, timezone, is_active, updated_at) " +
-    "VALUES (1, ?, ?, ?, ?, ?) " +
-    "ON CONFLICT(id) DO UPDATE SET title = excluded.title, start_date = excluded.start_date, " +
-    "timezone = excluded.timezone, is_active = excluded.is_active, updated_at = excluded.updated_at"
-  ).bind(title, startDate, timezone, isActive ? 1 : 0, new Date().toISOString()).run();
-  return json({ settings: publicSettings(await getChallengeSettings(env.DB)) });
-}
-
 async function routeApi(request, env) {
   const path = new URL(request.url).pathname;
   const method = request.method.toUpperCase();
-
   if (!env.DB) {
     return errorResponse("The D1 database is not connected yet. Follow the setup steps in the repository README.", 503);
   }
@@ -574,8 +342,13 @@ async function routeApi(request, env) {
     }
   }
 
-  const isMutation = method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
-  if (isMutation && !validateOrigin(request)) return errorResponse("Request origin could not be verified.", 403);
+  const isMutation = method === "POST" || method === "DELETE";
+  if (isMutation) {
+    const origin = request.headers.get("Origin");
+    if (!origin || new URL(origin).origin !== new URL(request.url).origin) {
+      return errorResponse("Request origin could not be verified.", 403);
+    }
+  }
 
   if (method === "POST" && path === "/api/auth/register") return handleRegister(request, env);
   if (method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
@@ -583,7 +356,7 @@ async function routeApi(request, env) {
 
   if (method === "GET" && path === "/api/me") {
     const user = await getSession(request, env.DB);
-    return json({ user: user ? { id: user.id, username: user.username, role: user.role } : null });
+    return json({ user: user ? { id: user.id, username: user.username } : null });
   }
 
   if (method === "GET" && path === "/api/dashboard") {
@@ -604,20 +377,6 @@ async function routeApi(request, env) {
     const flightId = path.slice("/api/flights/".length);
     if (!/^[A-Za-z0-9_-]{10,40}$/.test(flightId)) return errorResponse("Invalid flight ID.");
     return handleDeleteFlight(env, auth.user, flightId);
-  }
-
-  if (method === "GET" && path === "/api/leaderboard") return handleLeaderboard(env);
-
-  if (method === "GET" && path === "/api/admin/overview") {
-    const auth = await requireAdmin(request, env.DB);
-    if (auth.response) return auth.response;
-    return handleAdminOverview(env);
-  }
-
-  if (method === "POST" && path === "/api/admin/challenge") {
-    const auth = await requireAdmin(request, env.DB);
-    if (auth.response) return auth.response;
-    return handleSaveChallenge(request, env);
   }
 
   return errorResponse("API route not found.", 404);

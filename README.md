@@ -1,21 +1,21 @@
-# RC Plane Flight Tracker
+# RC Plane Flight Journal
 
-A fresh RC-plane weekly tracker built for Cloudflare Workers and Cloudflare D1. It does not use Supabase.
+A private RC-plane flight logging app built for Cloudflare Workers and Cloudflare D1. It does not use Supabase.
 
-## Included in this starter
+This first version is a personal journal rather than a weekly flying challenge. It deliberately has no required flying quotas, missed-week penalties, streaks, or participant rankings. Never fly just to fill in a log or meet a target; follow local field rules and suitable conditions.
+
+## Included
 
 - Username-and-password registration and sign-in (no email address required).
 - PBKDF2-HMAC-SHA256 password hashing with a per-user random salt.
 - Hashed, HTTP-only, Secure, SameSite session cookies.
 - Server-side authorization and same-origin checks for write requests.
 - Basic registration and sign-in rate limits.
-- Flight logging, recent history, and owner-only flight deletion.
-- A 52-week calendar calculated from one shared start date.
-- Completed weeks, missed weeks, current streak, and progress percentage.
-- A public leaderboard with usernames and challenge statistics.
-- An administrator settings panel for the challenge title, start date, and time zone.
+- Flight logging with date, aircraft, duration, and notes.
+- Personal flight history and total flight statistics.
+- Owner-only flight deletion.
 
-The first version stores flight date, aircraft, duration, and notes. Photo evidence and password recovery are not included yet. Because accounts do not use email addresses, lost passwords currently need an administrator-assisted reset.
+Photo uploads and password recovery are not included yet. Because accounts do not use email addresses, a lost password cannot currently be reset from the app.
 
 ## Cloudflare setup
 
@@ -41,7 +41,7 @@ From a terminal in the repository, run:
     npm install
     npx wrangler d1 migrations apply rc-plane-tracker --remote
 
-This creates the accounts, sessions, challenge settings, flights, and rate-limit tables.
+This creates the accounts, sessions, flights, and rate-limit tables.
 
 Alternatively, open the D1 database's **Console** in Cloudflare and run the SQL in migrations/0001_initial.sql.
 
@@ -52,31 +52,6 @@ Commit and push the repository to GitHub. Your connected Cloudflare Worker shoul
     npm run deploy
 
 The Worker needs the D1 binding named **DB**. The static front end is served from public/ and API requests are routed through src/worker.js.
-
-### 5. Create the first administrator
-
-1. Open the deployed app and create your own account.
-2. In the Cloudflare D1 Console, run the following query, replacing YOUR_USERNAME with your exact username:
-
-    UPDATE users SET role = 'admin' WHERE username = 'YOUR_USERNAME';
-
-3. Sign out and sign back in. The Challenge settings administrator panel will appear.
-
-The administrator can set the challenge title, official start date, time zone, and active status. Choose the official start date before inviting participants.
-
-## Challenge rules in this version
-
-- The challenge has 52 consecutive seven-day windows (364 days).
-- A week is completed when at least one logged flight has a date inside that week's date range.
-- Multiple flights in a week still count as one completed week.
-- An uncompleted week becomes missed after its final day has passed.
-- Later weeks remain upcoming until their dates arrive.
-- Flights outside the challenge period remain in the participant's flight history but do not complete a challenge week.
-- The challenge time zone determines the current challenge date. Participants should enter the actual date of their flight.
-
-The app is a record-keeping tool, not a reason to fly in poor conditions. Follow local field rules and suitable safety practices; skip a week whenever flying would not be safe or appropriate.
-
-The application does not independently verify that a flight took place. The initial version trusts participant flight logs; photo evidence and administrator review can be added in a later stage.
 
 ## Local development
 
@@ -98,9 +73,6 @@ The local database is separate from the remote production database.
 - GET /api/dashboard
 - POST /api/flights
 - DELETE /api/flights/:id
-- GET /api/leaderboard
-- GET /api/admin/overview
-- POST /api/admin/challenge
 - GET /api/health
 
 ## Security notes

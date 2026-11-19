@@ -1,4 +1,4 @@
--- RC Plane Flight Tracker: initial schema
+-- RC Plane Flight Journal: initial schema
 -- Passwords are stored as PBKDF2 hashes. Raw passwords are never stored.
 PRAGMA foreign_keys = ON;
 
@@ -7,8 +7,6 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT NOT NULL COLLATE NOCASE UNIQUE,
   password_salt TEXT NOT NULL,
   password_hash TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'participant'
-    CHECK (role IN ('participant', 'admin')),
   created_at TEXT NOT NULL
 );
 
@@ -20,19 +18,6 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
-
-CREATE TABLE IF NOT EXISTS challenge_settings (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
-  title TEXT NOT NULL DEFAULT '52-Week RC Flight Challenge',
-  start_date TEXT,
-  timezone TEXT NOT NULL DEFAULT 'America/Los_Angeles',
-  is_active INTEGER NOT NULL DEFAULT 0 CHECK (is_active IN (0, 1)),
-  updated_at TEXT NOT NULL
-);
-INSERT OR IGNORE INTO challenge_settings
-  (id, title, start_date, timezone, is_active, updated_at)
-VALUES
-  (1, '52-Week RC Flight Challenge', NULL, 'America/Los_Angeles', 0, datetime('now'));
 
 CREATE TABLE IF NOT EXISTS flights (
   id TEXT PRIMARY KEY,

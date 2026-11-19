@@ -4,17 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101923">
-  <meta name="description" content="Track your RC flights and weekly flying challenge progress.">
-  <title>RC Plane Flight Tracker</title>
+  <meta name="description" content="Keep a private record of your RC airplane flights.">
+  <title>RC Plane Flight Journal</title>
   <link rel="stylesheet" href="/styles.css">
   <script src="/app.js" defer></script>
 </head>
 <body>
   <div class="site-shell">
     <header class="topbar">
-      <a class="brand" href="/" aria-label="RC Plane Flight Tracker home">
+      <a class="brand" href="/" aria-label="RC Plane Flight Journal home">
         <span class="brand-mark" aria-hidden="true">✈</span>
-        <span class="brand-copy"><strong>RC PLANE</strong><small>FLIGHT TRACKER</small></span>
+        <span class="brand-copy"><strong>RC PLANE</strong><small>FLIGHT JOURNAL</small></span>
       </a>
       <div id="account-area" class="account-area" hidden>
         <span id="account-name" class="account-name"></span>
@@ -25,15 +25,15 @@
     <main>
       <section id="auth-section" class="auth-layout">
         <div class="intro-copy">
-          <p class="eyebrow">THE YEAR-LONG FLYING CHALLENGE</p>
-          <h1>Make every<br><span>week count.</span></h1>
-          <p class="intro-text">Keep a record of your RC flights, follow your weekly progress, and see how the group is doing together.</p>
+          <p class="eyebrow">YOUR PERSONAL FLIGHT RECORD</p>
+          <h1>Keep track of<br><span>every flight.</span></h1>
+          <p class="intro-text">A simple place to record your RC airplane flights, aircraft, flight times, and notes from the field.</p>
           <div class="intro-points">
-            <span><i></i> 52 weekly windows</span>
-            <span><i></i> Personal flight log</span>
-            <span><i></i> Group leaderboard</span>
+            <span><i></i> Private account</span>
+            <span><i></i> Flight history</span>
+            <span><i></i> Personal statistics</span>
           </div>
-          <p class="safety-note">Safety comes first: never fly just to protect a streak. Follow field rules, suitable conditions, and appropriate supervision. Skipping an unsafe week is always the right choice.</p>
+          <p class="safety-note">Use this as a record, not a reason to fly. Follow field rules and suitable conditions, and skip flying whenever it would not be safe or appropriate.</p>
         </div>
 
         <section class="panel auth-panel" aria-labelledby="auth-title">
@@ -42,9 +42,9 @@
             <button id="register-tab" class="auth-tab" type="button" role="tab" aria-selected="false">Create account</button>
           </div>
           <div class="auth-heading">
-            <p class="eyebrow">WELCOME TO THE CHALLENGE</p>
+            <p class="eyebrow">WELCOME</p>
             <h2 id="auth-title">Welcome back</h2>
-            <p id="auth-subtitle">Sign in to view your flight log and weekly progress.</p>
+            <p id="auth-subtitle">Sign in to view your personal flight journal.</p>
           </div>
           <form id="auth-form">
             <label class="field">
@@ -60,165 +60,95 @@
             <button id="auth-submit" class="button button-primary button-full" type="submit">Sign in</button>
             <p id="auth-message" class="form-message" role="status" aria-live="polite"></p>
           </form>
-          <p class="auth-footnote">Accounts use a username and password. No email address is required. Lost passwords currently require an administrator-assisted reset.</p>
+          <p class="auth-footnote">No email address is required. Password recovery is not included in this first version, so keep your password somewhere safe.</p>
         </section>
       </section>
 
       <section id="app-section" class="app-section" hidden>
         <div class="page-heading">
           <div>
-            <p class="eyebrow">YOUR FLIGHT LOG</p>
+            <p class="eyebrow">YOUR PERSONAL LOGBOOK</p>
             <h1>Welcome, <span id="welcome-name">pilot</span>.</h1>
-            <p class="muted">Record your flights and follow the group's progress.</p>
+            <p class="muted">Your flights, all in one place.</p>
           </div>
-          <span class="challenge-chip"><i></i> 52-WEEK CHALLENGE</span>
+          <span class="journal-chip">PERSONAL FLIGHT JOURNAL</span>
         </div>
 
-        <div class="safety-banner">Safety first: don't fly in unsuitable conditions or at an unapproved location to complete a week. Your safety matters more than a streak.</div>
+        <div class="safety-banner">Safety comes before logging totals: never fly in unsuitable conditions or at an unapproved location. This journal does not set flight quotas or streak goals.</div>
 
         <div class="stats-grid">
           <article class="stat-card stat-highlight">
-            <span class="stat-label">Weeks completed</span>
-            <strong id="stat-completed">0<span>/52</span></strong>
-            <div class="stat-track"><i id="stat-progress-bar"></i></div>
-            <small id="stat-progress-label">0% of the challenge</small>
-          </article>
-          <article class="stat-card">
-            <span class="stat-label">Current streak</span>
-            <strong id="stat-streak">0 <em>weeks</em></strong>
-            <small>Consecutive successful weeks</small>
-          </article>
-          <article class="stat-card">
-            <span class="stat-label">Missed weeks</span>
-            <strong id="stat-missed">0</strong>
-            <small>Weeks that ended without a flight</small>
-          </article>
-          <article class="stat-card">
-            <span class="stat-label">Flights logged</span>
+            <span class="stat-label">Flights recorded</span>
             <strong id="stat-flights">0</strong>
-            <small id="stat-minutes">0 total minutes</small>
+            <small>All flights in your journal</small>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Total flight time</span>
+            <strong id="stat-minutes">0 <em>min</em></strong>
+            <small>Combined duration</small>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Days flown</span>
+            <strong id="stat-days">0</strong>
+            <small>Distinct dates in your log</small>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Most recent flight</span>
+            <strong id="stat-latest" class="latest-stat">—</strong>
+            <small>Based on your latest entry</small>
           </article>
         </div>
 
         <div class="content-grid">
-          <div class="main-column">
-            <section class="panel challenge-panel">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">THE BIG PICTURE</p>
-                  <h2 id="challenge-title">52-Week RC Flight Challenge</h2>
-                  <p id="challenge-meta" class="muted">Waiting for the challenge to be configured.</p>
-                </div>
-                <span id="challenge-status" class="status-pill status-neutral">Not started</span>
+          <section class="panel flight-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">ADD TO YOUR LOGBOOK</p>
+                <h2>Record a flight</h2>
+                <p class="muted">Enter details for a flight you have already completed.</p>
               </div>
-              <div id="challenge-notice" class="notice" hidden></div>
-              <div class="weeks-heading">
-                <strong>Weekly progress</strong>
-                <span id="weeks-count" class="muted">0 of 52 complete</span>
+              <span class="panel-icon" aria-hidden="true">＋</span>
+            </div>
+            <form id="flight-form" class="flight-form">
+              <div class="form-row">
+                <label class="field">
+                  <span>Flight date</span>
+                  <input id="flight-date" name="flightDate" type="date" required>
+                </label>
+                <label class="field">
+                  <span>Flight duration (minutes)</span>
+                  <input id="flight-duration" name="durationMinutes" type="number" min="1" max="720" step="1" placeholder="20" required>
+                </label>
               </div>
-              <div id="weeks-grid" class="weeks-grid" aria-label="52 weekly challenge boxes"></div>
-              <div class="legend">
-                <span><i class="legend-complete"></i> Completed</span>
-                <span><i class="legend-current"></i> Current week</span>
-                <span><i class="legend-missed"></i> Missed</span>
-                <span><i class="legend-upcoming"></i> Upcoming</span>
+              <label class="field">
+                <span>Aircraft</span>
+                <input id="flight-aircraft" name="aircraft" type="text" maxlength="60" placeholder="e.g. Trainer, glider, or warbird" required>
+              </label>
+              <label class="field">
+                <span>Notes <small class="optional-label">Optional</small></span>
+                <textarea id="flight-notes" name="notes" maxlength="500" rows="4" placeholder="Field conditions, aircraft setup, or anything you want to remember..."></textarea>
+              </label>
+              <div class="form-footer">
+                <p id="flight-message" class="form-message" role="status" aria-live="polite"></p>
+                <button class="button button-primary" type="submit">Save flight</button>
               </div>
-            </section>
+            </form>
+          </section>
 
-            <section class="panel flight-panel">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">KEEP YOUR LOG UP TO DATE</p>
-                  <h2>Log a flight</h2>
-                  <p class="muted">The flight is assigned to a challenge week using its date.</p>
-                </div>
-                <span class="panel-icon" aria-hidden="true">＋</span>
-              </div>
-              <form id="flight-form" class="flight-form">
-                <div class="form-row">
-                  <label class="field">
-                    <span>Flight date</span>
-                    <input id="flight-date" name="flightDate" type="date" required>
-                  </label>
-                  <label class="field">
-                    <span>Flight duration (minutes)</span>
-                    <input id="flight-duration" name="durationMinutes" type="number" min="1" max="720" step="1" placeholder="20" required>
-                  </label>
-                </div>
-                <label class="field">
-                  <span>Aircraft</span>
-                  <input id="flight-aircraft" name="aircraft" type="text" maxlength="60" placeholder="e.g. Trainer, warbird, glider" required>
-                </label>
-                <label class="field">
-                  <span>Notes <small class="optional-label">Optional</small></span>
-                  <textarea id="flight-notes" name="notes" maxlength="500" rows="3" placeholder="Field conditions, how the flight went, or anything you want to remember..."></textarea>
-                </label>
-                <div class="form-footer">
-                  <p id="flight-message" class="form-message" role="status" aria-live="polite"></p>
-                  <button class="button button-primary" type="submit">Save flight</button>
-                </div>
-              </form>
-            </section>
-
-            <section class="panel history-panel">
-              <div class="panel-heading">
-                <div><p class="eyebrow">YOUR RECORD</p><h2>Recent flights</h2></div>
-                <span id="flight-history-count" class="muted"></span>
-              </div>
-              <div id="flight-list" class="flight-list"></div>
-            </section>
-          </div>
-
-          <aside class="side-column">
-            <section class="panel leaderboard-panel">
-              <div class="panel-heading">
-                <div><p class="eyebrow">FRIENDLY COMPETITION</p><h2>Leaderboard</h2></div>
-                <span class="panel-icon" aria-hidden="true">↗</span>
-              </div>
-              <p class="muted small-copy">Ranked by completed weeks, then current streak, then total flights.</p>
-              <div id="leaderboard-list" class="leaderboard-list">
-                <p class="empty-state">Loading leaderboard...</p>
-              </div>
-            </section>
-
-            <section id="admin-panel" class="panel admin-panel" hidden>
-              <div class="panel-heading">
-                <div><p class="eyebrow">CONTROL ROOM</p><h2>Challenge settings</h2></div>
-                <span class="admin-tag">ADMIN</span>
-              </div>
-              <form id="admin-form" class="admin-form">
-                <label class="field">
-                  <span>Challenge name</span>
-                  <input id="admin-title" name="title" type="text" maxlength="80" required>
-                </label>
-                <label class="field">
-                  <span>Start date</span>
-                  <input id="admin-start-date" name="startDate" type="date">
-                </label>
-                <label class="field">
-                  <span>Challenge time zone</span>
-                  <input id="admin-timezone" name="timezone" type="text" maxlength="80" placeholder="America/Los_Angeles" required>
-                </label>
-                <label class="check-field">
-                  <input id="admin-active" name="isActive" type="checkbox">
-                  <span>Challenge is active</span>
-                </label>
-                <button class="button button-dark button-full" type="submit">Save challenge settings</button>
-                <p id="admin-message" class="form-message" role="status" aria-live="polite"></p>
-              </form>
-              <div class="admin-summary">
-                <strong>Participant overview</strong>
-                <div id="admin-overview" class="admin-overview"></div>
-              </div>
-            </section>
-          </aside>
+          <section class="panel history-panel">
+            <div class="panel-heading">
+              <div><p class="eyebrow">YOUR RECORD</p><h2>Flight history</h2></div>
+              <span id="flight-history-count" class="muted"></span>
+            </div>
+            <div id="flight-list" class="flight-list"></div>
+          </section>
         </div>
       </section>
     </main>
 
     <footer class="footer">
-      <span>RC PLANE FLIGHT TRACKER</span>
-      <span>One flight. Every week. 52 weeks.</span>
+      <span>RC PLANE FLIGHT JOURNAL</span>
+      <span>A personal record of completed flights.</span>
     </footer>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

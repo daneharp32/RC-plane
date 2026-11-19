@@ -10,9 +10,8 @@ function escapeHtml(value) {
 
 function localDate() {
   const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return now.getFullYear() + "-" + month + "-" + day;
+  return now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") +
+    "-" + String(now.getDate()).padStart(2, "0");
 }
 
 function showMessage(element, message, success) {
@@ -45,9 +44,14 @@ async function api(path, options) {
 }
 
 function setBusy(button, busy, busyText) {
-  if (!button.dataset.originalText) button.dataset.originalText = button.textContent;
-  button.disabled = busy;
-  button.textContent = busy ? busyText : button.dataset.originalText;
+  if (busy) {
+    button.dataset.originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = busyText;
+  } else {
+    button.disabled = false;
+    button.textContent = button.dataset.originalText || button.textContent;
+  }
 }
 
 function setAuthMode(mode) {
@@ -59,8 +63,8 @@ function setAuthMode(mode) {
   $("#register-tab").setAttribute("aria-selected", String(register));
   $("#auth-title").textContent = register ? "Create your account" : "Welcome back";
   $("#auth-subtitle").textContent = register
-    ? "Choose a username and password to join the challenge."
-    : "Sign in to view your flight log and weekly progress.";
+    ? "Choose a username and password to start your journal."
+    : "Sign in to view your personal flight journal.";
   $("#auth-submit").textContent = register ? "Create account" : "Sign in";
   $("#auth-password").setAttribute("autocomplete", register ? "new-password" : "current-password");
   $("#password-help").textContent = register ? "Use at least 10 characters." : "Enter your account password.";
@@ -81,136 +85,40 @@ function showSignedIn(user) {
   $("#account-area").hidden = false;
   $("#account-name").textContent = user.username;
   $("#welcome-name").textContent = user.username;
-  $("#admin-panel").hidden = user.role !== "admin";
 }
 
 function formatDate(value) {
-  if (!value) return "Not set";
+  if (!value) return "—";
   const date = new Date(value + "T00:00:00");
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
-function formatLongDate(value) {
-  if (!value) return "";
-  const date = new Date(value + "T00:00:00");
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric", year: "numeric" }).format(date);
-}
-
-function setChallengeSummary(summary, settings, totalFlights, totalMinutes) {
-  $("#stat-completed").innerHTML = String(summary.completedWeeks) + "<span>/52</span>";
-  $("#stat-streak").innerHTML = String(summary.streak) + " <em>weeks</em>";
-  $("#stat-missed").textContent = String(summary.missedWeeks);
-  $("#stat-flights").textContent = String(totalFlights);
-  $("#stat-minutes").textContent = String(totalMinutes) + " total minutes logged";
-  $("#stat-progress-bar").style.width = String(summary.progressPercent) + "%";
-  $("#stat-progress-label").textContent = String(summary.progressPercent) + "% of the challenge";
-  $("#challenge-title").textContent = settings.title;
-  $("#challenge-meta").textContent = settings.startDate
-    ? "Starts " + formatLongDate(settings.startDate) + " · " + settings.timezone
-    : "The administrator has not set a start date yet.";
-
-  const status = $("#challenge-status");
-  status.className = "status-pill";
-  if (!settings.isActive || !settings.startDate) {
-    status.classList.add("status-neutral");
-    status.textContent = "Not started";
-  } else if (summary.completedWeeks === 52) {
-    status.classList.add("status-done");
-    status.textContent = "Challenge complete";
-  } else {
-    status.classList.add("status-live");
-    status.textContent = "In progress";
-  }
-
-  const notice = $("#challenge-notice");
-  if (!settings.isActive || !settings.startDate) {
-    notice.hidden = false;
-    notice.textContent = "The challenge calendar will appear once an administrator chooses the official start date and activates the challenge. Flights can still be logged now.";
-  } else {
-    notice.hidden = true;
-  }
-
-  $("#weeks-count").textContent = summary.completedWeeks + " of 52 complete";
-  $("#weeks-grid").innerHTML = summary.weeks.map(function (week) {
-    const title = "Week " + week.number + (week.startDate ? " · " + week.startDate + " to " + week.endDate : "");
-    const label = week.status === "completed" ? "Completed" :
-      week.status === "missed" ? "Missed" :
-      week.status === "current" ? "Current week" : "Upcoming";
-    return '<div class="week-box ' + escapeHtml(week.status) + '" title="' +
-      escapeHtml(title + " — " + label) + '" aria-label="' +
-      escapeHtml(title + " — " + label) + '">' + week.number + "</div>";
-  }).join("");
-}
-
 function renderFlights(flights, totalFlights) {
-  $("#flight-history-count").textContent = totalFlights + " logged";
+  $("#flight-history-count").textContent = totalFlights + " recorded";
   if (!flights.length) {
-    $("#flight-list").innerHTML = '<p class="empty-state">No flights logged yet. Add your first flight above to start building your record.</p>';
+    $("#flight-list").innerHTML = '<p class="empty-state">No flights recorded yet. Add details for a completed flight to start your journal.</p>';
     return;
   }
   $("#flight-list").innerHTML = flights.map(function (flight) {
-    const notes = flight.notes ? " · " + escapeHtml(flight.notes) : "";
-    return '<div class="flight-row">' +
-      '<div class="flight-main"><strong>' + escapeHtml(flight.aircraft) + '</strong>' +
-      '<small>' + escapeHtml(formatDate(flight.flightDate)) + notes + '</small></div>' +
-      '<span class="flight-duration">' + escapeHtml(flight.durationMinutes) + ' min</span>' +
-      '<button class="delete-flight" type="button" data-delete-flight="' + escapeHtml(flight.id) + '" aria-label="Delete flight">Delete</button>' +
-      '</div>';
-  }).join("");
-}
-
-function renderLeaderboard(data) {
-  const list = $("#leaderboard-list");
-  if (!data || !data.leaderboard.length) {
-    list.innerHTML = '<p class="empty-state">No participants yet. Invite someone to join the challenge.</p>';
-    return;
-  }
-  list.innerHTML = data.leaderboard.map(function (entry, index) {
-    return '<div class="leader-row">' +
-      '<span class="leader-rank">' + (index + 1) + '</span>' +
-      '<div><div class="leader-name">' + escapeHtml(entry.username) + '</div>' +
-      '<div class="leader-detail">' + entry.streak + '-week streak · ' + entry.flightCount + ' flights</div></div>' +
-      '<div class="leader-score">' + entry.completedWeeks + '/52<small>weeks</small></div>' +
-      '</div>';
-  }).join("");
-}
-
-function renderAdminOverview(data) {
-  const target = $("#admin-overview");
-  if (!data.participants.length) {
-    target.innerHTML = '<p class="empty-state">No accounts registered yet.</p>';
-    return;
-  }
-  target.innerHTML = data.participants.map(function (person) {
-    return '<div class="admin-person"><span>' + escapeHtml(person.username) +
-      (person.role === "admin" ? " · admin" : "") + '</span><span>' +
-      person.completedWeeks + '/52 · ' + person.flightCount + ' flights</span></div>';
+    const notes = flight.notes ? '<p class="flight-notes">' + escapeHtml(flight.notes) + "</p>" : "";
+    return '<article class="flight-entry">' +
+      '<div class="flight-entry-main"><div class="flight-title">' + escapeHtml(flight.aircraft) + '</div>' +
+      '<div class="flight-date">' + escapeHtml(formatDate(flight.flightDate)) + '</div>' + notes + '</div>' +
+      '<div class="flight-entry-side"><strong>' + escapeHtml(flight.durationMinutes) + ' min</strong>' +
+      '<button class="delete-flight" type="button" data-delete-flight="' + escapeHtml(flight.id) + '" aria-label="Delete flight">Delete</button></div>' +
+      '</article>';
   }).join("");
 }
 
 async function loadDashboard() {
-  const results = await Promise.all([api("/api/dashboard"), api("/api/leaderboard")]);
-  const dashboard = results[0];
-  const leaderboard = results[1];
+  const dashboard = await api("/api/dashboard");
   showSignedIn(dashboard.user);
-  setChallengeSummary(
-    dashboard.challenge.summary,
-    dashboard.challenge.settings,
-    dashboard.totalFlights,
-    dashboard.totalMinutes
-  );
+  $("#stat-flights").textContent = String(dashboard.totalFlights);
+  $("#stat-minutes").innerHTML = String(dashboard.totalMinutes) + " <em>min</em>";
+  $("#stat-days").textContent = String(dashboard.flyingDays);
+  $("#stat-latest").textContent = dashboard.flights.length ? formatDate(dashboard.flights[0].flightDate) : "—";
   renderFlights(dashboard.flights, dashboard.totalFlights);
-  renderLeaderboard(leaderboard);
-  if (dashboard.user.role === "admin") {
-    $("#admin-title").value = dashboard.challenge.settings.title;
-    $("#admin-start-date").value = dashboard.challenge.settings.startDate || "";
-    $("#admin-timezone").value = dashboard.challenge.settings.timezone || "America/Los_Angeles";
-    $("#admin-active").checked = dashboard.challenge.settings.isActive;
-    const overview = await api("/api/admin/overview");
-    renderAdminOverview(overview);
-  }
 }
 
 async function checkSession() {
@@ -271,7 +179,7 @@ $("#flight-form").addEventListener("submit", async function (event) {
     $("#flight-date").value = localDate();
     showMessage(message, "Flight saved.", true);
     await loadDashboard();
-    toast("Flight added to your log.");
+    toast("Flight added to your journal.");
   } catch (error) {
     showMessage(message, error.message, false);
   } finally {
@@ -283,7 +191,7 @@ $("#flight-list").addEventListener("click", async function (event) {
   const button = event.target.closest("[data-delete-flight]");
   if (!button) return;
   const id = button.getAttribute("data-delete-flight");
-  if (!window.confirm("Delete this flight from your log?")) return;
+  if (!window.confirm("Delete this flight from your journal?")) return;
   button.disabled = true;
   try {
     await api("/api/flights/" + encodeURIComponent(id), { method: "DELETE" });
@@ -292,31 +200,6 @@ $("#flight-list").addEventListener("click", async function (event) {
   } catch (error) {
     button.disabled = false;
     toast(error.message);
-  }
-});
-
-$("#admin-form").addEventListener("submit", async function (event) {
-  event.preventDefault();
-  const button = event.currentTarget.querySelector('button[type="submit"]');
-  const message = $("#admin-message");
-  showMessage(message, "", false);
-  setBusy(button, true, "Saving...");
-  try {
-    await api("/api/admin/challenge", {
-      method: "POST",
-      body: {
-        title: $("#admin-title").value.trim(),
-        startDate: $("#admin-start-date").value || null,
-        timezone: $("#admin-timezone").value.trim(),
-        isActive: $("#admin-active").checked
-      }
-    });
-    showMessage(message, "Challenge settings saved.", true);
-    await loadDashboard();
-  } catch (error) {
-    showMessage(message, error.message, false);
-  } finally {
-    setBusy(button, false);
   }
 });
 
