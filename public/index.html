@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101923">
-  <meta name="description" content="Keep a private record of your RC airplane flights.">
+  <meta name="description" content="Share completed RC airplane flights with your flying group.">
   <title>RC Plane Flight Journal</title>
   <link rel="stylesheet" href="/styles.css">
   <script src="/app.js" defer></script>
@@ -25,15 +25,15 @@
     <main>
       <section id="auth-section" class="auth-layout">
         <div class="intro-copy">
-          <p class="eyebrow">YOUR PERSONAL FLIGHT RECORD</p>
-          <h1>Keep track of<br><span>every flight.</span></h1>
-          <p class="intro-text">A simple place to record your RC airplane flights, aircraft, flight times, and notes from the field.</p>
+          <p class="eyebrow">YOUR GROUP'S RC FLIGHT JOURNAL</p>
+          <h1>Good flights.<br><span>Good memories.</span></h1>
+          <p class="intro-text">Share a photo from your flying session, record which plane you took out, and catch up on everyone's latest posts.</p>
           <div class="intro-points">
-            <span><i></i> Private account</span>
-            <span><i></i> Flight history</span>
-            <span><i></i> Personal statistics</span>
+            <span><i></i> Flight photos</span>
+            <span><i></i> Shared activity feed</span>
+            <span><i></i> Your own flight history</span>
           </div>
-          <p class="safety-note">Use this as a record, not a reason to fly. Follow field rules and suitable conditions, and skip flying whenever it would not be safe or appropriate.</p>
+          <p class="safety-note">Use the journal to record flights you've already completed. Follow field rules and suitable conditions, and never fly just to make a post. Avoid sharing home or school addresses, faces of other people, or other private details in posts.</p>
         </div>
 
         <section class="panel auth-panel" aria-labelledby="auth-title">
@@ -44,7 +44,7 @@
           <div class="auth-heading">
             <p class="eyebrow">WELCOME</p>
             <h2 id="auth-title">Welcome back</h2>
-            <p id="auth-subtitle">Sign in to view your personal flight journal.</p>
+            <p id="auth-subtitle">Sign in to view the group flight feed.</p>
           </div>
           <form id="auth-form">
             <label class="field">
@@ -55,100 +55,163 @@
             <label class="field">
               <span>Password</span>
               <input id="auth-password" name="password" type="password" minlength="6" maxlength="128" autocomplete="current-password" placeholder="Your password" required>
-              <small id="password-help">Use at least 6 characters. A longer, unique password is safer.</small>
+              <small id="password-help">Use at least 6 characters.</small>
             </label>
             <button id="auth-submit" class="button button-primary button-full" type="submit">Sign in</button>
             <p id="auth-message" class="form-message" role="status" aria-live="polite"></p>
           </form>
-          <p class="auth-footnote">No email address is required. Password recovery is not included in this first version, so keep your password somewhere safe.</p>
+          <p class="auth-footnote">No email address is required. Password recovery is not included yet, so keep your password somewhere safe.</p>
         </section>
       </section>
 
       <section id="app-section" class="app-section" hidden>
         <div class="page-heading">
           <div>
-            <p class="eyebrow">YOUR PERSONAL LOGBOOK</p>
-            <h1>Welcome, <span id="welcome-name">pilot</span>.</h1>
-            <p class="muted">Your flights, all in one place.</p>
+            <p class="eyebrow">THE GROUP FLIGHT JOURNAL</p>
+            <h1>Hey, <span id="welcome-name">pilot</span>.</h1>
+            <p class="muted">See what everyone has been flying lately.</p>
           </div>
-          <span class="journal-chip">PERSONAL FLIGHT JOURNAL</span>
+          <button id="log-flight-button" class="button button-primary log-flight-top" type="button">＋ Log flight</button>
         </div>
 
-        <div class="safety-banner">Safety comes before logging totals: never fly in unsuitable conditions or at an unapproved location. This journal does not set flight quotas or streak goals.</div>
+        <nav class="app-nav" aria-label="Flight journal sections">
+          <button id="feed-tab" class="nav-tab active" type="button" aria-current="page">Community feed</button>
+          <button id="my-logs-tab" class="nav-tab" type="button">My flight logs</button>
+        </nav>
 
-        <div class="stats-grid">
-          <article class="stat-card stat-highlight">
-            <span class="stat-label">Flights recorded</span>
-            <strong id="stat-flights">0</strong>
-            <small>All flights in your journal</small>
-          </article>
-          <article class="stat-card">
-            <span class="stat-label">Total flight time</span>
-            <strong id="stat-minutes">0 <em>min</em></strong>
-            <small>Combined duration</small>
-          </article>
-          <article class="stat-card">
-            <span class="stat-label">Days flown</span>
-            <strong id="stat-days">0</strong>
-            <small>Distinct dates in your log</small>
-          </article>
-          <article class="stat-card">
-            <span class="stat-label">Most recent flight</span>
-            <strong id="stat-latest" class="latest-stat">—</strong>
-            <small>Based on your latest entry</small>
-          </article>
-        </div>
-
-        <div class="content-grid">
-          <section class="panel flight-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">ADD TO YOUR LOGBOOK</p>
-                <h2>Record a flight</h2>
-                <p class="muted">Enter details for a flight you have already completed.</p>
-              </div>
-              <span class="panel-icon" aria-hidden="true">＋</span>
+        <section id="feed-view" class="view-section">
+          <div class="feed-intro">
+            <div>
+              <p class="eyebrow">FROM THE FLYING FIELD</p>
+              <h2>Latest sessions</h2>
+              <p class="muted">New flight posts appear at the bottom. Scroll upward to browse older sessions.</p>
             </div>
-            <form id="flight-form" class="flight-form">
-              <div class="form-row">
-                <label class="field">
-                  <span>Flight date</span>
-                  <input id="flight-date" name="flightDate" type="date" required>
-                </label>
-                <label class="field">
-                  <span>Flight duration (minutes)</span>
-                  <input id="flight-duration" name="durationMinutes" type="number" min="1" max="720" step="1" placeholder="20" required>
-                </label>
-              </div>
-              <label class="field">
-                <span>Aircraft</span>
-                <input id="flight-aircraft" name="aircraft" type="text" maxlength="60" placeholder="e.g. Trainer, glider, or warbird" required>
-              </label>
-              <label class="field">
-                <span>Notes <small class="optional-label">Optional</small></span>
-                <textarea id="flight-notes" name="notes" maxlength="500" rows="4" placeholder="Field conditions, aircraft setup, or anything you want to remember..."></textarea>
-              </label>
-              <div class="form-footer">
-                <p id="flight-message" class="form-message" role="status" aria-live="polite"></p>
-                <button class="button button-primary" type="submit">Save flight</button>
-              </div>
-            </form>
-          </section>
-
-          <section class="panel history-panel">
-            <div class="panel-heading">
-              <div><p class="eyebrow">YOUR RECORD</p><h2>Flight history</h2></div>
-              <span id="flight-history-count" class="muted"></span>
+            <span class="feed-live"><i></i> Group feed</span>
+          </div>
+          <div id="feed-scroller" class="feed-scroller" aria-label="Community flight posts">
+            <div id="feed-top" class="feed-top">
+              <button id="load-older-button" class="button button-quiet button-small" type="button" hidden>Load older posts</button>
+              <p id="feed-loading" class="muted" hidden>Loading older posts…</p>
             </div>
-            <div id="flight-list" class="flight-list"></div>
-          </section>
-        </div>
+            <div id="feed-list" class="feed-list"></div>
+            <div id="feed-end" class="feed-end">That's the latest. Share a completed session to add a post.</div>
+          </div>
+          <p id="feed-message" class="form-message" role="status" aria-live="polite"></p>
+        </section>
+
+        <section id="my-logs-view" class="view-section" hidden>
+          <div class="feed-intro">
+            <div>
+              <p class="eyebrow">YOUR CONTRIBUTIONS</p>
+              <h2>My flight logs</h2>
+              <p class="muted">All the sessions you've shared with the group.</p>
+            </div>
+            <button id="log-flight-button-secondary" class="button button-primary" type="button">＋ Log flight</button>
+          </div>
+          <div class="stats-grid personal-stats">
+            <article class="stat-card stat-highlight">
+              <span class="stat-label">Posts shared</span>
+              <strong id="stat-posts">0</strong>
+              <small>Your contributions to the feed</small>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">Flying days</span>
+              <strong id="stat-days">0</strong>
+              <small>Different dates in your posts</small>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">Planes logged</span>
+              <strong id="stat-planes">0</strong>
+              <small>Different aircraft names</small>
+            </article>
+          </div>
+          <div id="my-posts-list" class="my-posts-list"></div>
+          <p id="my-logs-message" class="form-message" role="status" aria-live="polite"></p>
+        </section>
+
+        <section id="log-view" class="view-section log-view" hidden>
+          <div class="log-view-heading">
+            <button id="back-to-feed-button" class="back-button" type="button">← Back to feed</button>
+            <p class="eyebrow">SHARE A COMPLETED SESSION</p>
+            <h2>Log a flight</h2>
+            <p class="muted">Add the details and a photo of your RC plane at the flying spot.</p>
+          </div>
+
+          <form id="post-form" class="panel post-form">
+            <label class="field">
+              <span>Flying spot <b class="required-mark">*</b></span>
+              <select id="flying-spot" name="spot" required>
+                <option value="">Choose a flying spot</option>
+                <option value="chill_guy">Chill Guy</option>
+                <option value="unc_road">Unc Road</option>
+                <option value="sports_park">Sports Park</option>
+                <option value="shore_cliffs">Shore Cliffs</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+
+            <label id="other-spot-field" class="field" hidden>
+              <span>Describe the flying spot <b class="required-mark">*</b></span>
+              <input id="other-spot" name="otherSpot" type="text" maxlength="120" placeholder="A general name for the spot">
+              <small>Please use a general place name, not a home or school address.</small>
+            </label>
+
+            <fieldset class="plane-fieldset">
+              <legend>Plane(s) flown <b class="required-mark">*</b></legend>
+              <p class="field-hint">Add each aircraft you flew during this session. You can reuse names from your previous posts.</p>
+              <div id="selected-planes" class="selected-planes">
+                <span id="no-planes-message" class="no-planes-message">No planes added yet.</span>
+              </div>
+              <div class="add-plane-row">
+                <input id="plane-input" type="text" maxlength="60" list="plane-suggestions" placeholder="Enter or choose a plane">
+                <datalist id="plane-suggestions"></datalist>
+                <button id="add-plane-button" class="button button-quiet" type="button">Add plane</button>
+              </div>
+              <small class="field-hint">Add between 1 and 8 planes.</small>
+            </fieldset>
+
+            <label class="field">
+              <span>Flight date <b class="required-mark">*</b></span>
+              <input id="post-flight-date" name="flightDate" type="date" required>
+            </label>
+
+            <div class="field photo-field">
+              <span>Upload photo <b class="required-mark">*</b></span>
+              <label for="post-photo" class="photo-drop" id="photo-drop">
+                <span class="photo-icon">↑</span>
+                <strong id="photo-prompt">Choose a photo of your RC plane</strong>
+                <small>Photo required · JPEG, PNG, or WebP · up to 12 MB before compression</small>
+                <span class="button button-quiet photo-choose-button">Choose photo</span>
+              </label>
+              <input id="post-photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required hidden>
+              <div id="photo-preview-wrap" class="photo-preview-wrap" hidden>
+                <img id="photo-preview" alt="Preview of the selected RC plane photo">
+                <div class="photo-preview-caption">
+                  <span id="photo-file-name">Photo selected</span>
+                  <button id="remove-photo-button" class="text-button" type="button">Remove photo</button>
+                </div>
+              </div>
+              <small class="field-hint">The app resizes the photo before upload. Avoid including other people's faces or private information.</small>
+              <p id="photo-message" class="form-message" role="status" aria-live="polite"></p>
+            </div>
+
+            <label class="field">
+              <span>Description <small class="optional-label">Optional</small></span>
+              <textarea id="post-description" name="description" maxlength="1000" rows="4" placeholder="How did the session go? Share a few details..."></textarea>
+            </label>
+
+            <div class="post-form-footer">
+              <p id="post-message" class="form-message" role="status" aria-live="polite"></p>
+              <button id="publish-post-button" class="button button-primary" type="submit">Post flight log</button>
+            </div>
+          </form>
+        </section>
       </section>
     </main>
 
     <footer class="footer">
       <span>RC PLANE FLIGHT JOURNAL</span>
-      <span>A personal record of completed flights.</span>
+      <span>A shared record of completed flights.</span>
     </footer>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
