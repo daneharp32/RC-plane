@@ -471,6 +471,11 @@ async function handleFeed(request, env, user) {
   const limit = mineOnly ? 40 : 12;
   const beforeCreatedAt = url.searchParams.get("beforeCreatedAt");
   const beforeId = url.searchParams.get("beforeId");
+  const afterCreatedAt = url.searchParams.get("afterCreatedAt");
+  const afterId = url.searchParams.get("afterId");
+  const isNewerQuery = Boolean(afterCreatedAt && afterId &&
+    !Number.isNaN(Date.parse(afterCreatedAt)) &&
+    /^[A-Za-z0-9_-]{10,40}$/.test(afterId));
 
   let sql =
     "SELECT p.id, p.flight_date, p.spot, p.other_spot, p.planes_json, " +
@@ -481,29 +486,34 @@ async function handleFeed(request, env, user) {
     sql += " AND p.user_id = ?";
     bindings.push(user.id);
   }
-  if (beforeCreatedAt && beforeId &&
+  if (isNewerQuery) {
+    sql += " AND (p.created_at > ? OR (p.created_at = ? AND p.id > ?))";
+    bindings.push(afterCreatedAt, afterCreatedAt, afterId);
+  } else if (beforeCreatedAt && beforeId &&
       !Number.isNaN(Date.parse(beforeCreatedAt)) &&
       /^[A-Za-z0-9_-]{10,40}$/.test(beforeId)) {
     sql += " AND (p.created_at < ? OR (p.created_at = ? AND p.id < ?))";
     bindings.push(beforeCreatedAt, beforeCreatedAt, beforeId);
   }
-  sql += " ORDER BY p.created_at DESC, p.id DESC LIMIT ?";
+  sql += isNewerQuery
+    ? " ORDER BY p.created_at ASC, p.id ASC LIMIT ?"
+    : " ORDER BY p.created_at DESC, p.id DESC LIMIT ?";
   bindings.push(limit + 1);
 
   let statement = env.DB.prepare(sql);
   if (bindings.length) statement = statement.bind.apply(statement, bindings);
   const result = await statement.all();
   const rows = result.results || [];
-  const hasMore = rows.length > limit;
+  const hasMore = !isNewerQuery && rows.length > limit;
   const page = rows.slice(0, limit);
-  const oldest = page.length ? page[page.length - 1] : null;
+  const cursorRow = page.length ? page[page.length - 1] : null;
 
   return json({
     posts: page.map(publicPost),
     hasMore: hasMore,
-    nextCursor: hasMore && oldest ? {
-      createdAt: oldest.created_at,
-      id: oldest.id
+    nextCursor: hasMore && cursorRow ? {
+      createdAt: cursorRow.created_at,
+      id: cursorRow.id
     } : null
   });
 }
