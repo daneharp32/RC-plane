@@ -476,10 +476,15 @@ async function compressPhoto(file) {
     // Try good quality first, then progressively reduce quality and dimensions
     // until the JPEG fits the D1 row and request limits.
     const maxDimensions = [1600, 1400, 1200, 1000, 850, 720, 600];
+    const uniqueDimensions = Array.from(new Set(
+      maxDimensions.map(function (maxSide) {
+        return Math.min(maxSide, Math.max(originalWidth, originalHeight));
+      })
+    ));
     const qualities = [0.82, 0.72, 0.62, 0.52, 0.44];
     let lastSize = 0;
 
-    for (const maxSide of maxDimensions) {
+    for (const maxSide of uniqueDimensions) {
       const scale = Math.min(1, maxSide / Math.max(originalWidth, originalHeight));
       const width = Math.max(1, Math.round(originalWidth * scale));
       const height = Math.max(1, Math.round(originalHeight * scale));
