@@ -67,7 +67,7 @@ function setAuthMode(mode) {
     : "Sign in to view your personal flight journal.";
   $("#auth-submit").textContent = register ? "Create account" : "Sign in";
   $("#auth-password").setAttribute("autocomplete", register ? "new-password" : "current-password");
-  $("#password-help").textContent = register ? "Use at least 10 characters." : "Enter your account password.";
+  $("#password-help").textContent = register ? "Use at least 6 characters. Longer is safer." : "Enter your account password.";
   showMessage($("#auth-message"), "", false);
 }
 
