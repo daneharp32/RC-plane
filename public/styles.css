@@ -793,7 +793,7 @@ html[data-theme="dark"] .group-owner-transfer-note { color: #a0afba; }
 .dashboard-greeting {
   margin: 14px 0 0;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 650;
   line-height: 1.45;
 }
@@ -808,7 +808,7 @@ html[data-theme="dark"] .group-owner-transfer-note { color: #a0afba; }
   }
   .dashboard-greeting {
     margin-top: 11px;
-    font-size: 13px;
+    font-size: 15px;
   }
   .page-heading-actions {
     width: 100%;
