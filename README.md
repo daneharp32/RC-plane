@@ -9,16 +9,17 @@ A private, group-based RC-plane flight journal built for Cloudflare Workers and 
 - Hashed, HTTP-only, Secure, SameSite session cookies.
 - Server-side authorization and same-origin checks for write requests.
 - Login rate limiting.
-- Flight-post composer with flying spot, one or more aircraft, completed flight date, required plane photo (including mobile camera-roll selection), and optional description.
-- Community feed visible to signed-in users, with newest posts at the bottom and older posts loaded when scrolling upward.
-- Personal flight-log view with totals and aircraft suggestions.
+- Flight-log composer with flying spot, one or more aircraft, completed flight date, required plane photo (including mobile camera-roll selection), and optional description.
+- Fun-post composer for group messages with an optional photo; fun posts are visually distinct in the feed and never count toward the flying challenge.
+- Mixed group feed visible to signed-in users, with newest posts at the bottom and older posts loaded when scrolling upward.
+- Personal flight-log view with flight-log-only totals and aircraft suggestions.
 - Participants directory with completed challenge-week counts, profile pictures, usernames, and Hangar summaries.
 - Per-user Hangars where members list aircraft they own, with optional photos and descriptions.
 - Account settings for changing a username and profile picture.
 - Multiple private groups: create a group or join one using its invite code.
 - Group owners choose the group name and participant limit, can regenerate invite codes, share administrator access, and transfer ownership.
 - Group admins can moderate group posts, manage the optional challenge, and remove regular members from their group.
-- Group-specific feeds, participants, Hangars, and 360-day challenge settings. Accounts can belong to one group at a time.
+- Group-specific feeds, Hangars, and 360-day challenge settings. Accounts can belong to one group at a time.
 - An optional 360-day calendar window; weeks are counted as seven-day blocks with at least one logged completed session. The app does not set flight quotas or missed-week penalties.
 - Owner-specific account data and server-side validation.
 
@@ -34,7 +35,7 @@ Password recovery is not included yet. Because accounts do not use email address
 
 The repository is configured for the existing Worker named \`flyers\`. The D1 binding is named \`DB\`, and it points to the database \`rc-plane-tracker\`.
 
-The Worker automatically creates the flight_posts, user_moderation, challenge_settings, user_profiles, hangar_planes, groups, group_members, group_bans, group_challenge_settings, and app_migrations tables and their indexes when the API is first used. It also adds the group_id column to flight_posts when needed. Repeatable SQL is included in migrations/0002_flight_posts.sql through migrations/0005_groups.sql. No manual database-console step is needed for these tables or the group column.
+The Worker automatically creates the flight_posts, user_moderation, challenge_settings, user_profiles, hangar_planes, groups, group_members, group_bans, group_challenge_settings, and app_migrations tables and their indexes when the API is first used. It also adds the group_id and post_type columns to flight_posts when needed. Existing flight_posts are automatically assigned the default type flight, so no existing flight log is changed. Fun posts use the same group-scoped feed table but are filtered out of the 360-day challenge, My Logs, and flying statistics. Repeatable SQL is included in migrations/0002_flight_posts.sql through migrations/0005_groups.sql; the Worker handles the post_type column upgrade automatically. No manual database-console step is needed for these tables or the group column.
 
 On the first API request after the group update, the Worker automatically creates a group named **Flyers** for every account that already exists. The account with the exact username `Dane` becomes the group owner; all other existing accounts join as members. Existing flight posts are assigned to Flyers, and the previous challenge dates are copied into Flyers' group challenge settings. Existing profiles and Hangar entries remain attached to the same accounts. This is a one-time migration and does not change anyone's password or delete existing posts.
 
