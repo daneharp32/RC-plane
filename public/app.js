@@ -2,6 +2,7 @@ const $ = function (selector) { return document.querySelector(selector); };
 
 let authMode = "login";
 let currentUser = null;
+let currentGroup = null;
 let selectedPlanes = [];
 let knownPlanes = [];
 let selectedPhotoBase64 = "";
@@ -116,6 +117,7 @@ function setAuthMode(mode) {
 function showSignedOut() {
   stopFeedPolling();
   currentUser = null;
+  currentGroup = null;
   participantsCache = [];
   activeHangarUserId = null;
   activeHangarUsername = "";
@@ -123,8 +125,10 @@ function showSignedOut() {
   selectedHangarPhotoBase64 = "";
   selectedAvatarBase64 = "";
   $("#auth-section").hidden = false;
+  $("#group-setup-section").hidden = true;
   $("#app-section").hidden = true;
   $("#account-area").hidden = true;
+  $("#group-tab").hidden = true;
   $("#admin-tab").hidden = true;
   $("#challenge-banner").hidden = true;
   $("#auth-form").reset();
@@ -133,12 +137,15 @@ function showSignedOut() {
 
 function showSignedIn(user) {
   currentUser = user;
+  const hasGroup = Boolean(user.groupId);
   $("#auth-section").hidden = true;
-  $("#app-section").hidden = false;
+  $("#group-setup-section").hidden = hasGroup;
+  $("#app-section").hidden = !hasGroup;
   $("#account-area").hidden = false;
   $("#account-name").textContent = user.username;
   $("#welcome-name").textContent = user.username;
-  $("#admin-tab").hidden = !user.isAdmin;
+  $("#group-tab").hidden = !hasGroup;
+  $("#admin-tab").hidden = !hasGroup || !user.isAdmin;
   renderTopbarAvatar(user.avatarBase64 || "", user.username);
 }
 
@@ -357,22 +364,21 @@ function renderAdminOverview(data) {
   $("#admin-user-count").textContent = String(users.length);
   $("#admin-users-list").innerHTML = users.length
     ? users.map(function (user) {
-        let action = '<span class="admin-protected-label">Administrator · protected</span>';
-        if (!user.isAdmin) {
-          action = '<div class="admin-list-actions"><button class="button button-quiet ' +
-            (user.isSuspended ? "" : "danger-button") + '" type="button" data-admin-user-action="' +
-            (user.isSuspended ? "restore" : "suspend") + '" data-admin-user-id="' +
-            escapeHtml(user.id) + '" data-admin-user-name="' + escapeHtml(user.username) + '">' +
-            (user.isSuspended ? "Restore" : "Kick user") + '</button></div>';
-        }
-        const status = user.isAdmin ? "Administrator" : (user.isSuspended ? "Suspended" : "Active");
+        const isOwner = user.role === "owner";
+        const isAdmin = user.role === "admin";
+        const mayKick = !isOwner && (!isAdmin || currentUser.groupRole === "owner") && user.id !== currentUser.id;
+        const action = mayKick
+          ? '<div class="admin-list-actions"><button class="button button-quiet danger-button" type="button" data-admin-user-action="kick" data-admin-user-id="' +
+            escapeHtml(user.id) + '" data-admin-user-name="' + escapeHtml(user.username) + '">Kick</button></div>'
+          : '<span class="admin-protected-label">' + (isOwner ? "Group owner" : "Administrator") + '</span>';
+        const status = isOwner ? "Group owner" : (isAdmin ? "Administrator" : "Member");
         return '<div class="admin-list-row"><div class="admin-list-copy"><strong>' +
           escapeHtml(user.username) + '</strong><small>' + escapeHtml(status) + ' · ' +
           escapeHtml(String(user.postCount)) + ' posts · Joined ' +
           escapeHtml(formatDate((user.createdAt || "").slice(0, 10))) +
           '</small></div>' + action + '</div>';
       }).join("")
-    : '<p class="muted">There are no accounts yet.</p>';
+    : '<p class="muted">There are no members in this group.</p>';
 }
 
 async function loadAdminPanel() {
@@ -397,8 +403,7 @@ async function loadAdminPanel() {
       switchView("feed");
       showMessage(
         $("#feed-message"),
-        'The server sees your username as "' + currentUser.username +
-        '". Administrator access requires the username to contain "Dane".',
+        'Your account does not have administrator access in this group.',
         false
       );
       return;
@@ -424,6 +429,91 @@ async function loadAdminPanel() {
 }
 
 
+
+function renderGroupPanel(group) {
+  currentGroup = group;
+  $("#group-heading").textContent = group.name;
+  $("#group-subtitle").textContent = group.isOwner
+    ? "You're the owner of this group. Invite friends and manage its settings."
+    : (group.canManage ? "You're a group administrator. You can help manage the crew." : "Your group home, invite code, and flight crew.");
+  $("#group-role-badge").textContent = group.isOwner ? "Owner" : (group.role === "admin" ? "Administrator" : "Member");
+  $("#group-invite-code").textContent = group.inviteCode;
+  $("#group-member-count").textContent = group.memberCount + (group.memberCount === 1 ? " participant" : " participants");
+  $("#group-member-limit").textContent = "Limit: " + group.maxMembers;
+  $("#group-owner-settings").hidden = !group.isOwner;
+  $("#group-regenerate-code").hidden = !group.isOwner;
+  $("#group-leave-button").hidden = group.isOwner;
+  $("#group-owner-transfer-note").hidden = !group.isOwner;
+  $("#group-settings-name").value = group.name;
+  $("#group-settings-limit").value = group.maxMembers;
+
+  const members = Array.isArray(group.members) ? group.members : [];
+  $("#group-members-count").textContent = String(members.length);
+  $("#group-members-list").innerHTML = members.map(function (member) {
+    const isSelf = member.id === currentUser.id;
+    let roleLabel = member.role === "owner" ? "Owner" : (member.role === "admin" ? "Administrator" : "Member");
+    let actions = '<span class="admin-protected-label">' + (isSelf ? "You" : roleLabel) + '</span>';
+    if (!isSelf && group.isOwner && member.role !== "owner") {
+      const nextRole = member.role === "admin" ? "member" : "admin";
+      const roleText = member.role === "admin" ? "Remove admin" : "Make admin";
+      actions = '<div class="admin-list-actions">' +
+        '<button class="button button-quiet" type="button" data-group-role="' + nextRole +
+        '" data-group-user-id="' + escapeHtml(member.id) + '" data-group-user-name="' + escapeHtml(member.username) + '">' +
+        roleText + '</button>' +
+        '<button class="button button-quiet" type="button" data-group-transfer-owner="' + escapeHtml(member.id) +
+        '" data-group-user-name="' + escapeHtml(member.username) + '">Transfer</button>' +
+        '<button class="button button-quiet danger-button" type="button" data-group-kick="' + escapeHtml(member.id) +
+        '" data-group-user-name="' + escapeHtml(member.username) + '">Kick</button></div>';
+    } else if (!isSelf && group.canManage && member.role === "member") {
+      actions = '<div class="admin-list-actions"><button class="button button-quiet danger-button" type="button" data-group-kick="' +
+        escapeHtml(member.id) + '" data-group-user-name="' + escapeHtml(member.username) + '">Kick</button></div>';
+    }
+    return '<div class="admin-list-row"><div class="admin-list-copy"><strong>' +
+      escapeHtml(member.username) + '</strong><small>' + escapeHtml(roleLabel) + '</small></div>' +
+      actions + '</div>';
+  }).join("");
+
+  const banned = Array.isArray(group.bannedUsers) ? group.bannedUsers : [];
+  $("#group-bans-panel").hidden = !group.isOwner || !banned.length;
+  $("#group-bans-list").innerHTML = banned.map(function (person) {
+    return '<div class="admin-list-row"><div class="admin-list-copy"><strong>' +
+      escapeHtml(person.username) + '</strong><small>Removed ' + escapeHtml(formatTimestamp(person.bannedAt)) +
+      '</small></div><div class="admin-list-actions"><button class="button button-quiet" type="button" data-group-unban="' +
+      escapeHtml(person.id) + '" data-group-user-name="' + escapeHtml(person.username) + '">Restore</button></div></div>';
+  }).join("");
+}
+
+async function loadGroupPanel() {
+  if (!currentUser || !currentUser.groupId) return;
+  showMessage($("#group-message"), "", false);
+  $("#group-members-list").innerHTML = '<p class="muted">Loading participants…</p>';
+  try {
+    const result = await api("/api/group");
+    if (!result.group) {
+      await checkSession();
+      return;
+    }
+    renderGroupPanel(result.group);
+  } catch (error) {
+    showMessage($("#group-message"), error.message, false);
+  }
+}
+
+async function createOrJoinGroup(path, body, button, messageElement) {
+  setBusy(button, true, path.endsWith("/create") ? "Creating…" : "Joining…");
+  showMessage(messageElement, "", false);
+  try {
+    await api(path, { method: "POST", body: body });
+    showMessage(messageElement, "Group ready.", true);
+    await checkSession();
+    switchView("group");
+    toast(path.endsWith("/create") ? "Group created." : "Joined group.");
+  } catch (error) {
+    showMessage(messageElement, error.message, false);
+  } finally {
+    setBusy(button, false);
+  }
+}
 function avatarMarkup(base64, username, className) {
   const initial = username ? username.slice(0, 1).toUpperCase() : "?";
   if (base64) {
@@ -662,6 +752,7 @@ function switchView(view) {
   const isParticipants = view === "participants";
   const isHangar = view === "hangar";
   const isSettings = view === "settings";
+  const isGroup = view === "group";
   const isAdminView = view === "admin";
   $("#feed-view").hidden = !isFeed;
   $("#my-logs-view").hidden = !isMine;
@@ -669,18 +760,21 @@ function switchView(view) {
   $("#participants-view").hidden = !isParticipants;
   $("#hangar-view").hidden = !isHangar;
   $("#settings-view").hidden = !isSettings;
+  $("#group-view").hidden = !isGroup;
   $("#admin-view").hidden = !isAdminView;
   $("#feed-tab").classList.toggle("active", isFeed);
   $("#my-logs-tab").classList.toggle("active", isMine);
   $("#participants-tab").classList.toggle("active", isParticipants);
   $("#hangar-tab").classList.toggle("active", isHangar);
   $("#settings-tab").classList.toggle("active", isSettings);
+  $("#group-tab").classList.toggle("active", isGroup);
   $("#admin-tab").classList.toggle("active", isAdminView);
   $("#feed-tab").toggleAttribute("aria-current", isFeed);
   $("#my-logs-tab").toggleAttribute("aria-current", isMine);
   $("#participants-tab").toggleAttribute("aria-current", isParticipants);
   $("#hangar-tab").toggleAttribute("aria-current", isHangar);
   $("#settings-tab").toggleAttribute("aria-current", isSettings);
+  $("#group-tab").toggleAttribute("aria-current", isGroup);
   $("#admin-tab").toggleAttribute("aria-current", isAdminView);
 
   if (isFeed) {
@@ -700,6 +794,7 @@ function switchView(view) {
   if (view === "participants") loadParticipants();
   if (view === "hangar") loadHangar();
   if (view === "settings") loadSettings();
+  if (isGroup) loadGroupPanel();
   if (isAdminView) loadAdminPanel();
   if (isLog) {
     $("#post-flight-date").value = localDate();
@@ -926,6 +1021,10 @@ async function checkSession() {
     const result = await api("/api/me");
     if (result.user) {
       showSignedIn(result.user);
+      if (!result.user.groupId) {
+        showMessage($("#group-setup-message"), "Create a group or enter an invite code to join your friends.", false);
+        return;
+      }
       await loadSettings();
       await refreshMyStats();
       await loadChallengeBanner();
@@ -1044,29 +1143,180 @@ $("#admin-posts-list").addEventListener("click", async function (event) {
 $("#admin-users-list").addEventListener("click", async function (event) {
   const button = event.target.closest("[data-admin-user-action]");
   if (!button) return;
-  const action = button.getAttribute("data-admin-user-action");
   const userId = button.getAttribute("data-admin-user-id");
   const username = button.getAttribute("data-admin-user-name");
-  const suspending = action === "suspend";
-  const message = suspending
-    ? "Kick " + username + "? Their account will be suspended and all active sessions revoked. Their existing posts will remain."
-    : "Restore access for " + username + "?";
-  if (!window.confirm(message)) return;
-  setBusy(button, true, suspending ? "Suspending…" : "Restoring…");
+  if (!window.confirm("Remove " + username + " from this group? Their account and personal Hangar remain, but they cannot rejoin with this invite code.")) return;
+  setBusy(button, true, "Removing…");
   try {
-    await api("/api/admin/users/" + encodeURIComponent(userId) + "/" + action, {
-      method: "POST",
-      body: {}
-    });
+    await api("/api/admin/users/" + encodeURIComponent(userId) + "/kick", { method: "POST" });
     await loadAdminPanel();
-    toast(suspending ? username + " was suspended." : username + " was restored.");
+    await loadGroupPanel();
+    await loadParticipants();
+    toast(username + " was removed from the group.");
   } catch (error) {
     showMessage($("#admin-message"), error.message, false);
     button.disabled = false;
-    button.textContent = suspending ? "Kick user" : "Restore";
+    button.textContent = "Kick";
   }
 });
 
+
+
+$("#group-setup-signout").addEventListener("click", async function () {
+  try { await api("/api/auth/logout", { method: "POST", body: {} }); } catch (_error) {}
+  showSignedOut();
+});
+
+$("#group-create-form").addEventListener("submit", async function (event) {
+  event.preventDefault();
+  await createOrJoinGroup("/api/groups/create", {
+    name: $("#group-create-name").value.trim(),
+    maxMembers: Number($("#group-create-limit").value)
+  }, $("#group-create-button"), $("#group-create-message"));
+});
+$("#group-join-code").addEventListener("input", function () {
+  const clean = this.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+  this.value = clean.length > 4 ? clean.slice(0, 4) + "-" + clean.slice(4) : clean;
+});
+$("#group-join-form").addEventListener("submit", async function (event) {
+  event.preventDefault();
+  await createOrJoinGroup("/api/groups/join", {
+    code: $("#group-join-code").value.trim().toUpperCase()
+  }, $("#group-join-button"), $("#group-join-message"));
+  $("#group-join-code").value = "";
+});
+
+$("#group-tab").addEventListener("click", function () { switchView("group"); });
+$("#group-settings-form").addEventListener("submit", async function (event) {
+  event.preventDefault();
+  const button = $("#group-settings-save");
+  setBusy(button, true, "Saving…");
+  showMessage($("#group-settings-message"), "", false);
+  try {
+    await api("/api/group/settings", {
+      method: "POST",
+      body: {
+        name: $("#group-settings-name").value.trim(),
+        maxMembers: Number($("#group-settings-limit").value)
+      }
+    });
+    await loadGroupPanel();
+    toast("Group settings saved.");
+  } catch (error) {
+    showMessage($("#group-settings-message"), error.message, false);
+  } finally {
+    setBusy(button, false);
+  }
+});
+$("#group-copy-code").addEventListener("click", async function () {
+  try {
+    await navigator.clipboard.writeText($("#group-invite-code").textContent);
+    toast("Invite code copied.");
+  } catch (_error) {
+    showMessage($("#group-message"), "Copy isn't available here. You can select the invite code and copy it manually.", false);
+  }
+});
+$("#group-regenerate-code").addEventListener("click", async function () {
+  if (!window.confirm("Generate a new invite code? The old code will stop working.")) return;
+  setBusy($("#group-regenerate-code"), true, "Generating…");
+  try {
+    await api("/api/group/invite-code", { method: "POST", body: {} });
+    await loadGroupPanel();
+    toast("New invite code generated.");
+  } catch (error) {
+    showMessage($("#group-message"), error.message, false);
+  } finally {
+    setBusy($("#group-regenerate-code"), false);
+  }
+});
+$("#group-members-list").addEventListener("click", async function (event) {
+  const button = event.target.closest("[data-group-role], [data-group-transfer-owner], [data-group-kick]");
+  if (!button || !currentGroup) return;
+  const userId = button.getAttribute("data-group-user-id") ||
+    button.getAttribute("data-group-transfer-owner") || button.getAttribute("data-group-kick");
+  const username = button.getAttribute("data-group-user-name") || "this participant";
+
+  if (button.hasAttribute("data-group-role")) {
+    const role = button.getAttribute("data-group-role");
+    const message = role === "admin"
+      ? "Give " + username + " administrator access to this group?"
+      : "Remove administrator access from " + username + "?";
+    if (!window.confirm(message)) return;
+    setBusy(button, true, "Saving…");
+    try {
+      await api("/api/group/members/" + encodeURIComponent(userId) + "/role", {
+        method: "POST", body: { role: role }
+      });
+      await loadGroupPanel();
+      toast(role === "admin" ? username + " is now an administrator." : username + " is now a member.");
+    } catch (error) {
+      showMessage($("#group-message"), error.message, false);
+      button.disabled = false;
+    }
+    return;
+  }
+
+  if (button.hasAttribute("data-group-transfer-owner")) {
+    if (!window.confirm("Transfer group ownership to " + username + "? You will become an administrator, and they will become the owner.")) return;
+    setBusy(button, true, "Transferring…");
+    try {
+      await api("/api/group/transfer", { method: "POST", body: { userId: userId } });
+      await checkSession();
+      switchView("group");
+      toast("Group ownership transferred.");
+    } catch (error) {
+      showMessage($("#group-message"), error.message, false);
+      button.disabled = false;
+    }
+    return;
+  }
+
+  if (button.hasAttribute("data-group-kick")) {
+    if (!window.confirm("Remove " + username + " from this group? Their account and personal Hangar remain, but they cannot rejoin with this group's invite code.")) return;
+    setBusy(button, true, "Removing…");
+    try {
+      await api("/api/group/members/" + encodeURIComponent(userId) + "/kick", { method: "POST", body: {} });
+      await loadGroupPanel();
+      await loadParticipants();
+      await loadAdminPanelIfOpen();
+      toast(username + " was removed from the group.");
+    } catch (error) {
+      showMessage($("#group-message"), error.message, false);
+      button.disabled = false;
+    }
+  }
+});
+async function loadAdminPanelIfOpen() {
+  if (!$("#admin-view").hidden) await loadAdminPanel();
+}
+$("#group-bans-list").addEventListener("click", async function (event) {
+  const button = event.target.closest("[data-group-unban]");
+  if (!button) return;
+  const userId = button.getAttribute("data-group-unban");
+  const username = button.getAttribute("data-group-user-name");
+  if (!window.confirm("Remove the group restriction for " + username + "? They will need the current invite code to rejoin.")) return;
+  setBusy(button, true, "Restoring…");
+  try {
+    await api("/api/group/bans/" + encodeURIComponent(userId) + "/restore", { method: "POST", body: {} });
+    await loadGroupPanel();
+    toast(username + " can join again with the current code.");
+  } catch (error) {
+    showMessage($("#group-message"), error.message, false);
+    button.disabled = false;
+  }
+});
+$("#group-leave-button").addEventListener("click", async function () {
+  if (!window.confirm("Leave " + (currentGroup ? currentGroup.name : "this group") + "? Your flight posts and Hangar entries will remain with the group, but you will no longer be able to see them.")) return;
+  setBusy($("#group-leave-button"), true, "Leaving…");
+  try {
+    await api("/api/group/leave", { method: "POST", body: {} });
+    await checkSession();
+    toast("You left the group.");
+  } catch (error) {
+    showMessage($("#group-message"), error.message, false);
+    setBusy($("#group-leave-button"), false);
+  }
+});
 
 $("#participants-tab").addEventListener("click", function () { switchView("participants"); });
 $("#hangar-tab").addEventListener("click", function () {
