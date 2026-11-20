@@ -240,17 +240,12 @@
             </label>
 
             <fieldset class="plane-fieldset">
-              <legend>Plane(s) flown <b class="required-mark">*</b></legend>
-              <p class="field-hint">Add each aircraft you flew during this session. You can reuse names from your previous posts.</p>
-              <div id="selected-planes" class="selected-planes">
-                <span id="no-planes-message" class="no-planes-message">No planes added yet.</span>
+              <legend>Aircraft flown <b class="required-mark">*</b></legend>
+              <p class="field-hint">Choose the aircraft you flew from your Hangar. Select between 1 and 8.</p>
+              <div id="flight-plane-options" class="flight-plane-options" role="group" aria-label="Aircraft in your Hangar" tabindex="-1">
+                <p class="muted">Loading your Hangar…</p>
               </div>
-              <div class="add-plane-row">
-                <input id="plane-input" type="text" maxlength="60" list="plane-suggestions" placeholder="Enter or choose a plane">
-                <datalist id="plane-suggestions"></datalist>
-                <button id="add-plane-button" class="button button-quiet" type="button">Add plane</button>
-              </div>
-              <small class="field-hint">Add between 1 and 8 planes.</small>
+              <p id="selected-planes" class="selected-plane-summary" aria-live="polite">No aircraft selected yet.</p>
             </fieldset>
 
             <label class="field">
