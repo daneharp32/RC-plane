@@ -743,3 +743,16 @@ html[data-theme="dark"] .group-owner-transfer-note { color: #a0afba; }
   .group-settings-fields { grid-template-columns: 1fr; }
   .group-code { min-width: 118px; font-size: 15px; }
 }
+
+/* Make the active group's name the clear title of its Group page. */
+#group-heading {
+  margin: 0;
+  color: var(--navy);
+  font-size: clamp(34px, 5vw, 48px);
+  line-height: 1.08;
+  letter-spacing: -.05em;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 720px) {
+  #group-heading { font-size: clamp(30px, 8vw, 38px); }
+}
