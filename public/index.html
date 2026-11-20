@@ -69,6 +69,56 @@
         </section>
       </section>
 
+      
+      <section id="group-setup-section" class="group-setup-section" hidden>
+        <div class="group-setup-heading">
+          <p class="eyebrow">YOUR CREW, YOUR FLIGHT JOURNAL</p>
+          <h1>Find your group.</h1>
+          <p class="muted">Create a group for your friends, or join one with an invite code from its owner.</p>
+        </div>
+        <div class="group-setup-grid">
+          <section class="panel group-setup-card">
+            <div class="group-setup-card-icon">＋</div>
+            <p class="eyebrow">START A NEW GROUP</p>
+            <h2>Create a group</h2>
+            <p class="muted">You'll be the group owner. You can invite friends, choose the group size, and share admin access.</p>
+            <form id="group-create-form">
+              <label class="field">
+                <span>Group name</span>
+                <input id="group-create-name" type="text" minlength="2" maxlength="40" placeholder="e.g. Weekend Flyers" required>
+              </label>
+              <label class="field">
+                <span>Maximum participants</span>
+                <input id="group-create-limit" type="number" min="2" max="100" value="25" required>
+                <small>Choose between 2 and 100 people.</small>
+              </label>
+              <button id="group-create-button" class="button button-primary button-full" type="submit">Create group</button>
+              <p id="group-create-message" class="form-message" role="status" aria-live="polite"></p>
+            </form>
+          </section>
+          <section class="panel group-setup-card">
+            <div class="group-setup-card-icon">↗</div>
+            <p class="eyebrow">JOIN YOUR FRIENDS</p>
+            <h2>Join a group</h2>
+            <p class="muted">Ask a group member for their invite code, then enter it below.</p>
+            <form id="group-join-form">
+              <label class="field">
+                <span>Group invite code</span>
+                <input id="group-join-code" type="text" maxlength="9" inputmode="text" autocapitalize="characters" autocomplete="off" placeholder="ABCD-EFGH" required>
+              </label>
+              <div class="group-join-hint">
+                <span class="group-join-hint-icon">ⓘ</span>
+                <span>Invite codes are case-insensitive. A group may have a participant limit.</span>
+              </div>
+              <button id="group-join-button" class="button button-primary button-full" type="submit">Join group</button>
+              <p id="group-join-message" class="form-message" role="status" aria-live="polite"></p>
+            </form>
+          </section>
+        </div>
+        <p id="group-setup-message" class="form-message" role="status" aria-live="polite"></p>
+        <button id="group-setup-signout" class="text-button" type="button">Sign out</button>
+      </section>
+
       <section id="app-section" class="app-section" hidden>
         <div class="page-heading">
           <div>
@@ -87,6 +137,10 @@
           <button id="participants-tab" class="nav-tab" type="button">
             <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 20v-1.5A5.2 5.2 0 0 1 8 13.3h2a5.2 5.2 0 0 1 5.2 5.2V20zM15.5 5.3a3.1 3.1 0 0 1 0 5.9M17 13.7a4.6 4.6 0 0 1 4.2 4.6V20h-4"/></svg>
             <span>People</span>
+          </button>
+          <button id="group-tab" class="nav-tab" type="button">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V21H3z"/><path d="M8 21v-6h8v6M12 3v5"/></svg>
+            <span>Group</span>
           </button>
           <button id="hangar-tab" class="nav-tab" type="button">
             <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m2 12 20-8-7.7 18-3.2-7.2L2 12Z"/><path d="m11.1 14.8 5.1-5.1"/></svg>
@@ -338,6 +392,91 @@
               <button id="settings-save-button" class="button button-primary" type="submit">Save changes</button>
             </form>
           </section>
+        </section>
+
+        <section id="group-view" class="view-section group-view" hidden>
+          <div class="feed-intro">
+            <div>
+              <p class="eyebrow">YOUR FLIGHT CREW</p>
+              <h2 id="group-heading">Group</h2>
+              <p id="group-subtitle" class="muted">Manage your group, invite friends, and choose administrators.</p>
+            </div>
+            <span id="group-role-badge" class="admin-badge">Member</span>
+          </div>
+
+          <section class="panel group-invite-panel">
+            <div class="group-invite-copy">
+              <p class="eyebrow">INVITE FRIENDS</p>
+              <h3>Group invite code</h3>
+              <p class="muted">Share this code with friends so they can join your group.</p>
+            </div>
+            <div class="group-code-row">
+              <strong id="group-invite-code" class="group-code">----</strong>
+              <button id="group-copy-code" class="button button-quiet button-small" type="button">Copy code</button>
+            </div>
+            <div class="group-capacity-row">
+              <span id="group-member-count">0 participants</span>
+              <span id="group-member-limit">Limit: 25</span>
+            </div>
+            <button id="group-regenerate-code" class="text-button" type="button" hidden>Generate a new invite code</button>
+          </section>
+
+          <section id="group-owner-settings" class="panel group-settings-panel" hidden>
+            <div class="admin-panel-heading">
+              <div>
+                <p class="eyebrow">OWNER SETTINGS</p>
+                <h3>Group settings</h3>
+                <p class="muted">Change the group name or participant limit.</p>
+              </div>
+            </div>
+            <form id="group-settings-form">
+              <div class="group-settings-fields">
+                <label class="field">
+                  <span>Group name</span>
+                  <input id="group-settings-name" type="text" minlength="2" maxlength="40" required>
+                </label>
+                <label class="field">
+                  <span>Maximum participants</span>
+                  <input id="group-settings-limit" type="number" min="2" max="100" required>
+                </label>
+              </div>
+              <div class="group-settings-actions">
+                <p id="group-settings-message" class="form-message" role="status" aria-live="polite"></p>
+                <button id="group-settings-save" class="button button-primary" type="submit">Save settings</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="panel group-members-panel">
+            <div class="admin-panel-heading">
+              <div>
+                <p class="eyebrow">THE CREW</p>
+                <h3>Participants and administrators</h3>
+              </div>
+              <span id="group-members-count" class="admin-count">0</span>
+            </div>
+            <p class="muted">The group owner can share admin access or transfer ownership. Group admins can manage posts, the challenge, and remove regular members.</p>
+            <div id="group-members-list" class="admin-list">
+              <p class="muted">Loading participants…</p>
+            </div>
+          </section>
+
+          <section id="group-bans-panel" class="panel group-members-panel" hidden>
+            <div class="admin-panel-heading">
+              <div>
+                <p class="eyebrow">ACCESS CONTROL</p>
+                <h3>Removed participants</h3>
+              </div>
+            </div>
+            <p class="muted">Restoring someone removes the group restriction. They will need the current invite code to join again.</p>
+            <div id="group-bans-list" class="admin-list"></div>
+          </section>
+
+          <div class="group-leave-row">
+            <p id="group-message" class="form-message" role="status" aria-live="polite"></p>
+            <button id="group-leave-button" class="button button-quiet danger-button" type="button">Leave group</button>
+          </div>
+          <p class="group-owner-transfer-note" id="group-owner-transfer-note" hidden>As the group owner, transfer ownership to another participant before leaving.</p>
         </section>
         <section id="admin-view" class="view-section admin-view" hidden>
           <div class="feed-intro">
