@@ -420,10 +420,24 @@
             <div>
               <p class="eyebrow">YOUR FLIGHT CREW</p>
               <h2 id="group-heading">Group</h2>
-              <p id="group-subtitle" class="muted">Manage your group, invite friends, and choose administrators.</p>
+              <p id="group-subtitle" class="muted">Your group members, their Hangars, and group settings.</p>
             </div>
             <span id="group-role-badge" class="admin-badge">Member</span>
           </div>
+
+          <section class="panel group-members-panel group-members-primary">
+            <div class="admin-panel-heading">
+              <div>
+                <p class="eyebrow">THE CREW</p>
+                <h3>Everyone in your group</h3>
+                <p class="muted">See who's in the group and open their aircraft Hangar.</p>
+              </div>
+              <span id="group-members-count" class="admin-count">0</span>
+            </div>
+            <div id="group-members-list" class="group-members-grid">
+              <p class="muted">Loading group members…</p>
+            </div>
+          </section>
 
           <section class="panel group-invite-panel">
             <div class="group-invite-copy">
@@ -466,20 +480,6 @@
                 <button id="group-settings-save" class="button button-primary" type="submit">Save settings</button>
               </div>
             </form>
-          </section>
-
-          <section class="panel group-members-panel">
-            <div class="admin-panel-heading">
-              <div>
-                <p class="eyebrow">THE CREW</p>
-                <h3>Participants and administrators</h3>
-              </div>
-              <span id="group-members-count" class="admin-count">0</span>
-            </div>
-            <p class="muted">The group owner can share admin access or transfer ownership. Group admins can manage posts, the challenge, and remove regular members.</p>
-            <div id="group-members-list" class="admin-list">
-              <p class="muted">Loading participants…</p>
-            </div>
           </section>
 
           <section id="group-bans-panel" class="panel group-members-panel" hidden>
