@@ -126,7 +126,10 @@
             <h1>Hey, <span id="welcome-name">pilot</span>.</h1>
             <p class="muted">See what everyone has been flying lately.</p>
           </div>
-          <button id="log-flight-button" class="button button-primary log-flight-top" type="button">＋ Log flight</button>
+          <div class="page-heading-actions">
+            <button id="log-flight-button" class="button button-primary log-flight-top" type="button">＋ Log flight</button>
+            <button id="create-fun-post-button" class="button button-quiet create-fun-post-top" type="button">✦ Fun post</button>
+          </div>
         </div>
 
         <nav class="app-nav" aria-label="Flight journal sections">
@@ -195,7 +198,7 @@
           </div>
           <div class="stats-grid personal-stats">
             <article class="stat-card stat-highlight">
-              <span class="stat-label">Posts shared</span>
+              <span class="stat-label">Flight logs</span>
               <strong id="stat-posts">0</strong>
               <small>Your contributions to the feed</small>
             </article>
@@ -292,6 +295,44 @@
           </form>
         </section>
 
+
+        <section id="fun-post-view" class="view-section log-view fun-post-view" hidden>
+          <div class="log-view-heading">
+            <button id="back-to-feed-fun-button" class="back-button" type="button">← Back to feed</button>
+            <p class="eyebrow">SOMETHING TO SHARE?</p>
+            <h2>Make a fun post</h2>
+            <p class="muted">Share a photo, a thought, or a moment with your group. Fun posts never count toward the 360-day flying challenge.</p>
+          </div>
+          <form id="fun-post-form" class="panel post-form fun-post-form">
+            <label class="field">
+              <span>Your message <small class="optional-label">Optional when adding a photo</small></span>
+              <textarea id="fun-post-text" maxlength="1000" rows="5" placeholder="What's happening? Share something with the group…"></textarea>
+            </label>
+            <div class="field photo-field">
+              <span>Photo <small class="optional-label">Optional</small></span>
+              <label for="fun-post-photo" class="photo-drop fun-photo-drop" id="fun-post-photo-drop">
+                <span class="photo-icon">✦</span>
+                <strong>Choose a photo from your camera roll</strong>
+                <small>Optional · Photos are resized before upload · up to 25 MB before compression</small>
+                <span class="button button-quiet photo-choose-button">Choose photo</span>
+              </label>
+              <input id="fun-post-photo" type="file" accept="image/*" hidden>
+              <div id="fun-post-photo-preview-wrap" class="photo-preview-wrap" hidden>
+                <img id="fun-post-photo-preview" alt="Preview of the selected fun-post photo">
+                <div class="photo-preview-caption">
+                  <span id="fun-post-photo-file-name">Photo selected</span>
+                  <button id="fun-post-photo-remove-button" class="text-button" type="button">Remove photo</button>
+                </div>
+              </div>
+              <small class="field-hint">Add text, a photo, or both. Avoid sharing other people's faces or private information.</small>
+              <p id="fun-post-photo-message" class="form-message" role="status" aria-live="polite"></p>
+            </div>
+            <div class="post-form-footer">
+              <p id="fun-post-message" class="form-message" role="status" aria-live="polite"></p>
+              <button id="publish-fun-post-button" class="button button-primary" type="submit">Share fun post</button>
+            </div>
+          </form>
+        </section>
 
         <section id="hangar-view" class="view-section hangar-view" hidden>
           <div class="feed-intro">
