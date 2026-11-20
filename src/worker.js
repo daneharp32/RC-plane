@@ -153,47 +153,68 @@ async function requestRateKey(request, prefix) {
   return prefix + ":" + await sha256(ip);
 }
 
+function publicUserIdentity(user) {
+  const role = user && user.groupRole ? user.groupRole : null;
+  return {
+    id: user.id,
+    username: user.username,
+    groupId: user.groupId || null,
+    groupName: user.groupName || null,
+    groupRole: role,
+    isAdmin: role === "owner" || role === "admin",
+    isOwner: role === "owner"
+  };
+}
+
+function isAdminUser(_env, user) {
+  return Boolean(user && (user.groupRole === "owner" || user.groupRole === "admin"));
+}
+
+async function requireGroup(request, db) {
+  const auth = await requireUser(request, db);
+  if (auth.response) return auth;
+  if (!auth.user.groupId) {
+    return { response: errorResponse("Create or join a group to use the flight journal.", 409) };
+  }
+  return auth;
+}
+
+async function requireAdmin(request, env) {
+  const auth = await requireGroup(request, env.DB);
+  if (auth.response) return auth;
+  if (!isAdminUser(env, auth.user)) {
+    return { response: errorResponse("Group administrator permission is required.", 403) };
+  }
+  return auth;
+}
+
 async function getSession(request, db) {
   const token = getCookie(request, SESSION_COOKIE);
   if (!token || token.length < 30 || token.length > 100) return null;
   const tokenHash = await sha256(token);
   const row = await db.prepare(
-    "SELECT u.id, u.username FROM sessions s JOIN users u ON u.id = s.user_id " +
+    "SELECT u.id, u.username, gm.group_id, gm.role AS group_role, g.name AS group_name, " +
+    "g.invite_code, g.max_members FROM sessions s JOIN users u ON u.id = s.user_id " +
     "LEFT JOIN user_moderation m ON m.user_id = u.id " +
+    "LEFT JOIN group_members gm ON gm.user_id = u.id " +
+    "LEFT JOIN groups g ON g.id = gm.group_id " +
     "WHERE s.token_hash = ? AND s.expires_at > ? AND m.user_id IS NULL"
   ).bind(tokenHash, new Date().toISOString()).first();
-  return row ? { id: row.id, username: row.username } : null;
+  return row ? {
+    id: row.id,
+    username: row.username,
+    groupId: row.group_id || null,
+    groupName: row.group_name || null,
+    groupRole: row.group_role || null,
+    inviteCode: row.invite_code || null,
+    groupMaxMembers: row.max_members || null
+  } : null;
 }
 
 async function requireUser(request, db) {
   const user = await getSession(request, db);
   if (!user) return { response: errorResponse("Please sign in to continue.", 401) };
   return { user: user };
-}
-
-function normalizeAdminUsername(value) {
-  return typeof value === "string"
-    ? value.normalize("NFKC").trim().toLowerCase()
-    : "";
-}
-
-function isAdminUser(_env, user) {
-  return Boolean(user && normalizeAdminUsername(user.username).includes("dane"));
-}
-
-async function requireAdmin(request, env) {
-  const auth = await requireUser(request, env.DB);
-  if (auth.response) return auth;
-  if (!isAdminUser(env, auth.user)) {
-    return {
-      response: errorResponse(
-        "Administrator access denied for the signed-in username \"" +
-        auth.user.username + "\". The username must contain Dane.",
-        403
-      )
-    };
-  }
-  return auth;
 }
 
 async function createSessionResponse(db, user) {
@@ -204,8 +225,21 @@ async function createSessionResponse(db, user) {
   await db.prepare(
     "INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)"
   ).bind(tokenHash, user.id, expiresAt, now.toISOString()).run();
+  const member = await db.prepare(
+    "SELECT gm.group_id, gm.role AS group_role, g.name AS group_name, g.invite_code, g.max_members " +
+    "FROM group_members gm JOIN groups g ON g.id = gm.group_id WHERE gm.user_id = ?"
+  ).bind(user.id).first();
+  const sessionUser = {
+    id: user.id,
+    username: user.username,
+    groupId: member ? member.group_id : null,
+    groupName: member ? member.group_name : null,
+    groupRole: member ? member.group_role : null,
+    inviteCode: member ? member.invite_code : null,
+    groupMaxMembers: member ? member.max_members : null
+  };
   return json(
-    { user: { id: user.id, username: user.username } },
+    { user: publicUserIdentity(sessionUser) },
     200,
     { "Set-Cookie": cookieHeader(token, Math.floor(SESSION_DURATION_MS / 1000)) }
   );
@@ -311,11 +345,11 @@ async function handleDashboard(env, user) {
   const results = await Promise.all([
     env.DB.prepare(
       "SELECT COUNT(*) AS total, COUNT(DISTINCT flight_date) AS flying_days " +
-      "FROM flight_posts WHERE user_id = ?"
-    ).bind(user.id).first(),
+      "FROM flight_posts WHERE user_id = ? AND group_id = ?"
+    ).bind(user.id, user.groupId).first(),
     env.DB.prepare(
-      "SELECT planes_json FROM flight_posts WHERE user_id = ? ORDER BY created_at DESC LIMIT 500"
-    ).bind(user.id).all()
+      "SELECT planes_json FROM flight_posts WHERE user_id = ? AND group_id = ? ORDER BY created_at DESC LIMIT 500"
+    ).bind(user.id, user.groupId).all()
   ]);
 
   const totals = results[0] || { total: 0, flying_days: 0 };
@@ -459,6 +493,306 @@ async function ensureProfileHangarSchema(db) {
   profileHangarSchemaReady = true;
 }
 
+function randomInviteCode() {
+  const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  let code = "";
+  for (let i = 0; i < bytes.length; i += 1) code += alphabet[bytes[i] % alphabet.length];
+  return code.slice(0, 4) + "-" + code.slice(4);
+}
+
+let groupSchemaReady = false;
+
+async function ensureGroupSchema(db) {
+  if (groupSchemaReady) return;
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS groups (" +
+    "id TEXT PRIMARY KEY, name TEXT NOT NULL, invite_code TEXT NOT NULL UNIQUE, " +
+    "owner_user_id TEXT NOT NULL REFERENCES users(id), max_members INTEGER NOT NULL DEFAULT 25, created_at TEXT NOT NULL)"
+  ).run();
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS group_members (" +
+    "group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE, " +
+    "user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE, " +
+    "role TEXT NOT NULL CHECK(role IN ('owner','admin','member')), joined_at TEXT NOT NULL, PRIMARY KEY(group_id, user_id))"
+  ).run();
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS group_bans (" +
+    "group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE, " +
+    "user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, " +
+    "banned_by TEXT NOT NULL REFERENCES users(id), banned_at TEXT NOT NULL, PRIMARY KEY(group_id, user_id))"
+  ).run();
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS group_challenge_settings (" +
+    "group_id TEXT PRIMARY KEY REFERENCES groups(id) ON DELETE CASCADE, " +
+    "status TEXT NOT NULL CHECK(status IN ('not_started','active','ended')), " +
+    "start_date TEXT, end_date TEXT, ended_at TEXT, updated_at TEXT NOT NULL, updated_by TEXT REFERENCES users(id))"
+  ).run();
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)"
+  ).run();
+
+  const columns = await db.prepare("PRAGMA table_info(flight_posts)").all();
+  const names = new Set((columns.results || []).map(function (column) { return column.name; }));
+  if (!names.has("group_id")) {
+    await db.prepare("ALTER TABLE flight_posts ADD COLUMN group_id TEXT REFERENCES groups(id)").run();
+  }
+  await db.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_flight_posts_group_created ON flight_posts(group_id, created_at DESC, id DESC)"
+  ).run();
+  await db.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_group_members_group_role ON group_members(group_id, role)"
+  ).run();
+
+  const migration = await db.prepare(
+    "SELECT name FROM app_migrations WHERE name = 'bootstrap_existing_accounts_into_flyers_v1'"
+  ).first();
+  if (!migration) {
+    const accountResult = await db.prepare(
+      "SELECT id, username, created_at FROM users ORDER BY created_at ASC"
+    ).all();
+    const accounts = accountResult.results || [];
+    const existingGroup = await db.prepare("SELECT id FROM groups LIMIT 1").first();
+    if (!existingGroup && accounts.length) {
+      const exactDane = accounts.find(function (row) {
+        return String(row.username || "").trim().toLowerCase() === "dane";
+      });
+      const namedDane = accounts.find(function (row) {
+        return String(row.username || "").toLowerCase().includes("dane");
+      });
+      const owner = exactDane || namedDane || accounts[0];
+      const groupId = randomId();
+      const now = new Date().toISOString();
+      const statements = [
+        db.prepare(
+          "INSERT INTO groups (id, name, invite_code, owner_user_id, max_members, created_at) VALUES (?, 'Flyers', ?, ?, ?, ?)"
+        ).bind(groupId, randomInviteCode(), owner.id, Math.max(25, accounts.length), now)
+      ];
+      for (const account of accounts) {
+        statements.push(db.prepare(
+          "INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)"
+        ).bind(groupId, account.id, account.id === owner.id ? "owner" : "member", now));
+      }
+      statements.push(db.prepare("UPDATE flight_posts SET group_id = ? WHERE group_id IS NULL").bind(groupId));
+      statements.push(db.prepare(
+        "INSERT OR IGNORE INTO group_challenge_settings " +
+        "(group_id, status, start_date, end_date, ended_at, updated_at, updated_by) " +
+        "SELECT ?, status, start_date, end_date, ended_at, updated_at, updated_by FROM challenge_settings WHERE id = 1"
+      ).bind(groupId));
+      statements.push(db.prepare(
+        "INSERT OR IGNORE INTO group_challenge_settings (group_id, status, updated_at) VALUES (?, 'not_started', ?)"
+      ).bind(groupId, now));
+      statements.push(db.prepare(
+        "INSERT INTO app_migrations (name, applied_at) VALUES ('bootstrap_existing_accounts_into_flyers_v1', ?)"
+      ).bind(now));
+      await db.batch(statements);
+    } else {
+      await db.prepare(
+        "INSERT OR IGNORE INTO app_migrations (name, applied_at) VALUES ('bootstrap_existing_accounts_into_flyers_v1', ?)"
+      ).bind(new Date().toISOString()).run();
+    }
+  }
+  groupSchemaReady = true;
+}
+
+async function groupSummary(db, groupId, viewer) {
+  const [group, members, bans] = await Promise.all([
+    db.prepare(
+      "SELECT g.id, g.name, g.invite_code, g.max_members, g.owner_user_id, " +
+      "(SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS member_count " +
+      "FROM groups g WHERE g.id = ?"
+    ).bind(groupId).first(),
+    db.prepare(
+      "SELECT u.id, u.username, gm.role, gm.joined_at FROM group_members gm " +
+      "JOIN users u ON u.id = gm.user_id WHERE gm.group_id = ? " +
+      "ORDER BY CASE gm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, u.username COLLATE NOCASE"
+    ).bind(groupId).all(),
+    db.prepare(
+      "SELECT u.id, u.username, gb.banned_at FROM group_bans gb JOIN users u ON u.id = gb.user_id " +
+      "WHERE gb.group_id = ? ORDER BY gb.banned_at DESC"
+    ).bind(groupId).all()
+  ]);
+  if (!group) return null;
+  return {
+    id: group.id,
+    name: group.name,
+    inviteCode: group.invite_code,
+    maxMembers: group.max_members,
+    memberCount: group.member_count || 0,
+    ownerUserId: group.owner_user_id,
+    role: viewer.groupRole,
+    isOwner: viewer.groupRole === "owner",
+    canManage: viewer.groupRole === "owner" || viewer.groupRole === "admin",
+    members: (members.results || []).map(function (row) {
+      return { id: row.id, username: row.username, role: row.role, joinedAt: row.joined_at };
+    }),
+    bannedUsers: viewer.groupRole === "owner" ? (bans.results || []).map(function (row) {
+      return { id: row.id, username: row.username, bannedAt: row.banned_at };
+    }) : []
+  };
+}
+
+async function handleGetGroup(env, user) {
+  if (!user.groupId) return json({ group: null });
+  return json({ group: await groupSummary(env.DB, user.groupId, user) });
+}
+
+async function handleCreateGroup(request, env, user) {
+  if (user.groupId) return errorResponse("You are already in a group. Leave it before creating another.", 409);
+  const body = await readJson(request);
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const maxMembers = Number(body.maxMembers);
+  if (name.length < 2 || name.length > 40) return errorResponse("Group names must be 2–40 characters.");
+  if (!Number.isInteger(maxMembers) || maxMembers < 2 || maxMembers > 100) {
+    return errorResponse("Choose a group size between 2 and 100 people.");
+  }
+  const id = randomId();
+  const code = randomInviteCode();
+  const now = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO groups (id, name, invite_code, owner_user_id, max_members, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(id, name, code, user.id, maxMembers, now),
+    env.DB.prepare("INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, 'owner', ?)")
+      .bind(id, user.id, now),
+    env.DB.prepare("INSERT INTO group_challenge_settings (group_id, status, updated_at) VALUES (?, 'not_started', ?)")
+      .bind(id, now)
+  ]);
+  const groupUser = Object.assign({}, user, { groupId: id, groupName: name, groupRole: "owner" });
+  return json({ ok: true, group: await groupSummary(env.DB, id, groupUser) }, 201);
+}
+
+async function handleJoinGroup(request, env, user) {
+  if (user.groupId) return errorResponse("You are already in a group. Leave it before joining another.", 409);
+  const body = await readJson(request);
+  const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
+  if (!/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) return errorResponse("Enter a valid group code.");
+  const group = await env.DB.prepare(
+    "SELECT id, name, max_members FROM groups WHERE invite_code = ? COLLATE NOCASE"
+  ).bind(code).first();
+  if (!group) return errorResponse("No group was found with that code.", 404);
+  const banned = await env.DB.prepare(
+    "SELECT user_id FROM group_bans WHERE group_id = ? AND user_id = ?"
+  ).bind(group.id, user.id).first();
+  if (banned) return errorResponse("You have been removed from this group and cannot rejoin with its code.", 403);
+  const count = await env.DB.prepare("SELECT COUNT(*) AS total FROM group_members WHERE group_id = ?")
+    .bind(group.id).first();
+  if (count && count.total >= group.max_members) return errorResponse("This group has reached its member limit.", 409);
+  try {
+    await env.DB.prepare(
+      "INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)"
+    ).bind(group.id, user.id, new Date().toISOString()).run();
+  } catch (error) {
+    const message = error && error.message ? error.message.toLowerCase() : "";
+    if (message.includes("unique") || message.includes("constraint")) {
+      return errorResponse("This account is already assigned to a group.", 409);
+    }
+    throw error;
+  }
+  const joinedUser = Object.assign({}, user, { groupId: group.id, groupName: group.name, groupRole: "member" });
+  return json({ ok: true, group: await groupSummary(env.DB, group.id, joinedUser) });
+}
+
+async function handleLeaveGroup(env, user) {
+  if (!user.groupId) return errorResponse("You are not currently in a group.", 409);
+  if (user.groupRole === "owner") return errorResponse("Transfer group ownership to another participant before leaving.", 409);
+  await env.DB.prepare("DELETE FROM group_members WHERE group_id = ? AND user_id = ?")
+    .bind(user.groupId, user.id).run();
+  return json({ ok: true });
+}
+
+async function requireGroupOwner(request, env) {
+  const auth = await requireAdmin(request, env);
+  if (auth.response) return auth;
+  if (auth.user.groupRole !== "owner") {
+    return { response: errorResponse("Only the group owner can change group settings or administrator roles.", 403) };
+  }
+  return auth;
+}
+
+async function handleUpdateGroup(request, env, owner) {
+  const body = await readJson(request);
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const maxMembers = Number(body.maxMembers);
+  if (name.length < 2 || name.length > 40) return errorResponse("Group names must be 2–40 characters.");
+  if (!Number.isInteger(maxMembers) || maxMembers < 2 || maxMembers > 100) {
+    return errorResponse("Choose a group size between 2 and 100 people.");
+  }
+  const count = await env.DB.prepare("SELECT COUNT(*) AS total FROM group_members WHERE group_id = ?")
+    .bind(owner.groupId).first();
+  if (maxMembers < (count ? count.total : 1)) {
+    return errorResponse("The member limit cannot be lower than the current group size.");
+  }
+  await env.DB.prepare("UPDATE groups SET name = ?, max_members = ? WHERE id = ?")
+    .bind(name, maxMembers, owner.groupId).run();
+  const refreshed = Object.assign({}, owner, { groupName: name, groupMaxMembers: maxMembers });
+  return json({ ok: true, group: await groupSummary(env.DB, owner.groupId, refreshed) });
+}
+
+async function handleRegenerateGroupCode(env, owner) {
+  const code = randomInviteCode();
+  await env.DB.prepare("UPDATE groups SET invite_code = ? WHERE id = ?").bind(code, owner.groupId).run();
+  return json({ ok: true, inviteCode: code });
+}
+
+async function handleChangeGroupRole(request, env, owner, targetUserId) {
+  const body = await readJson(request);
+  if (body.role !== "admin" && body.role !== "member") return errorResponse("Choose either admin or member.");
+  const target = await env.DB.prepare(
+    "SELECT user_id, role FROM group_members WHERE group_id = ? AND user_id = ?"
+  ).bind(owner.groupId, targetUserId).first();
+  if (!target) return errorResponse("That participant is not in your group.", 404);
+  if (target.role === "owner" || target.user_id === owner.id) return errorResponse("Use ownership transfer to change the group owner.", 400);
+  await env.DB.prepare("UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?")
+    .bind(body.role, owner.groupId, targetUserId).run();
+  return json({ ok: true });
+}
+
+async function handleTransferGroupOwnership(request, env, owner) {
+  const body = await readJson(request);
+  const targetUserId = typeof body.userId === "string" ? body.userId : "";
+  if (!targetUserId || targetUserId === owner.id) return errorResponse("Choose another group participant.");
+  const target = await env.DB.prepare(
+    "SELECT user_id FROM group_members WHERE group_id = ? AND user_id = ?"
+  ).bind(owner.groupId, targetUserId).first();
+  if (!target) return errorResponse("That participant is not in your group.", 404);
+  await env.DB.batch([
+    env.DB.prepare("UPDATE group_members SET role = 'admin' WHERE group_id = ? AND user_id = ?")
+      .bind(owner.groupId, owner.id),
+    env.DB.prepare("UPDATE group_members SET role = 'owner' WHERE group_id = ? AND user_id = ?")
+      .bind(owner.groupId, targetUserId),
+    env.DB.prepare("UPDATE groups SET owner_user_id = ? WHERE id = ?")
+      .bind(targetUserId, owner.groupId)
+  ]);
+  return json({ ok: true });
+}
+
+async function handleKickGroupMember(env, admin, targetUserId) {
+  if (targetUserId === admin.id) return errorResponse("You cannot kick yourself.", 400);
+  const target = await env.DB.prepare(
+    "SELECT role FROM group_members WHERE group_id = ? AND user_id = ?"
+  ).bind(admin.groupId, targetUserId).first();
+  if (!target) return errorResponse("That participant is not in your group.", 404);
+  if (target.role === "owner" || (target.role === "admin" && admin.groupRole !== "owner")) {
+    return errorResponse("Only the group owner can remove another administrator.", 403);
+  }
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO group_bans (group_id, user_id, banned_by, banned_at) VALUES (?, ?, ?, ?) " +
+      "ON CONFLICT(group_id, user_id) DO UPDATE SET banned_by = excluded.banned_by, banned_at = excluded.banned_at"
+    ).bind(admin.groupId, targetUserId, admin.id, new Date().toISOString()),
+    env.DB.prepare("DELETE FROM group_members WHERE group_id = ? AND user_id = ?")
+      .bind(admin.groupId, targetUserId)
+  ]);
+  return json({ ok: true });
+}
+
+async function handleUnbanGroupMember(env, owner, targetUserId) {
+  const result = await env.DB.prepare("DELETE FROM group_bans WHERE group_id = ? AND user_id = ?")
+    .bind(owner.groupId, targetUserId).run();
+  if (!result.meta || result.meta.changes < 1) return errorResponse("That user is not on the removal list.", 404);
+  return json({ ok: true });
+}
+
 function validBase64Image(value, maxLength, optional) {
   if (typeof value !== "string") return false;
   if (optional && value === "") return true;
@@ -470,10 +804,7 @@ async function handleGetSettings(env, user) {
   const row = await env.DB.prepare(
     "SELECT avatar_base64 FROM user_profiles WHERE user_id = ?"
   ).bind(user.id).first();
-  return json({
-    user: { id: user.id, username: user.username, isAdmin: isAdminUser(env, user) },
-    avatarBase64: row && row.avatar_base64 ? row.avatar_base64 : ""
-  });
+  return json({ user: publicUserIdentity(user), avatarBase64: row && row.avatar_base64 ? row.avatar_base64 : "" });
 }
 
 async function handleUpdateSettings(request, env, user) {
@@ -513,29 +844,31 @@ async function handleUpdateSettings(request, env, user) {
     ).bind(user.id, new Date().toISOString()).run();
   }
 
-  return await handleGetSettings(env, { id: user.id, username: newUsername });
+  return await handleGetSettings(env, Object.assign({}, user, { username: newUsername }));
 }
 
-async function handleParticipants(env) {
+async function handleParticipants(env, user) {
   const result = await env.DB.prepare(
     "SELECT u.id, u.username, up.avatar_base64, " +
     "(SELECT COUNT(DISTINCT CAST((julianday(p.flight_date) - julianday(cs.start_date)) / 7 AS INTEGER)) " +
-    "FROM flight_posts p WHERE p.user_id = u.id AND cs.start_date IS NOT NULL " +
+    "FROM flight_posts p WHERE p.user_id = u.id AND p.group_id = ? AND cs.start_date IS NOT NULL " +
     "AND p.flight_date >= cs.start_date AND p.flight_date <= " +
     "CASE WHEN cs.status = 'ended' AND cs.ended_at IS NOT NULL THEN cs.ended_at ELSE cs.end_date END) AS weeks_completed " +
-    "FROM users u LEFT JOIN user_profiles up ON up.user_id = u.id " +
-    "LEFT JOIN challenge_settings cs ON cs.id = 1 " +
+    "FROM group_members gm JOIN users u ON u.id = gm.user_id " +
+    "LEFT JOIN user_profiles up ON up.user_id = u.id " +
+    "LEFT JOIN group_challenge_settings cs ON cs.group_id = gm.group_id " +
     "LEFT JOIN user_moderation m ON m.user_id = u.id " +
-    "WHERE m.user_id IS NULL ORDER BY u.username COLLATE NOCASE"
-  ).all();
+    "WHERE gm.group_id = ? AND m.user_id IS NULL ORDER BY u.username COLLATE NOCASE"
+  ).bind(user.groupId, user.groupId).all();
 
   const participants = result.results || [];
   const hangarRows = await env.DB.prepare(
     "SELECT h.user_id, h.name FROM hangar_planes h " +
+    "JOIN group_members gm ON gm.user_id = h.user_id " +
     "JOIN users u ON u.id = h.user_id " +
     "LEFT JOIN user_moderation m ON m.user_id = u.id " +
-    "WHERE m.user_id IS NULL ORDER BY h.name COLLATE NOCASE"
-  ).all();
+    "WHERE gm.group_id = ? AND m.user_id IS NULL ORDER BY h.name COLLATE NOCASE"
+  ).bind(user.groupId).all();
   const planeMap = new Map();
   for (const row of hangarRows.results || []) {
     if (!planeMap.has(row.user_id)) planeMap.set(row.user_id, []);
@@ -559,10 +892,11 @@ async function handleGetHangar(env, user, targetUserId) {
   const targetId = targetUserId || user.id;
   const target = await env.DB.prepare(
     "SELECT u.id, u.username, up.avatar_base64 FROM users u " +
+    "JOIN group_members gm ON gm.user_id = u.id AND gm.group_id = ? " +
     "LEFT JOIN user_profiles up ON up.user_id = u.id " +
     "LEFT JOIN user_moderation m ON m.user_id = u.id " +
     "WHERE u.id = ? AND m.user_id IS NULL"
-  ).bind(targetId).first();
+  ).bind(user.groupId, targetId).first();
   if (!target) return errorResponse("That participant could not be found.", 404);
   const result = await env.DB.prepare(
     "SELECT id, name, description, photo_base64, created_at, updated_at " +
@@ -627,34 +961,32 @@ function challengePublicState(row) {
   };
 }
 
-async function readChallengeState(db) {
+async function readChallengeState(db, groupId) {
   const row = await db.prepare(
-    "SELECT status, start_date, end_date, ended_at FROM challenge_settings WHERE id = 1"
-  ).first();
+    "SELECT status, start_date, end_date, ended_at FROM group_challenge_settings WHERE group_id = ?"
+  ).bind(groupId).first();
   return challengePublicState(row);
 }
 
-async function handleChallengeStatus(env) {
-  return json({ challenge: await readChallengeState(env.DB) });
+async function handleChallengeStatus(env, user) {
+  return json({ challenge: await readChallengeState(env.DB, user.groupId) });
 }
 
-async function handleAdminOverview(env) {
+async function handleAdminOverview(env, admin) {
   const [challenge, posts, users] = await Promise.all([
-    readChallengeState(env.DB),
+    readChallengeState(env.DB, admin.groupId),
     env.DB.prepare(
       "SELECT p.id, p.flight_date, p.spot, p.other_spot AS otherSpot, p.description, p.created_at, u.username " +
-      "FROM flight_posts p JOIN users u ON u.id = p.user_id " +
+      "FROM flight_posts p JOIN users u ON u.id = p.user_id WHERE p.group_id = ? " +
       "ORDER BY p.created_at DESC, p.id DESC"
-    ).all(),
+    ).bind(admin.groupId).all(),
     env.DB.prepare(
-      "SELECT u.id, u.username, u.created_at, " +
-      "CASE WHEN m.user_id IS NULL THEN 0 ELSE 1 END AS is_suspended, " +
-      "(SELECT COUNT(*) FROM flight_posts p WHERE p.user_id = u.id) AS post_count " +
-      "FROM users u LEFT JOIN user_moderation m ON m.user_id = u.id " +
-      "ORDER BY u.created_at ASC"
-    ).all()
+      "SELECT u.id, u.username, u.created_at, gm.role, " +
+      "(SELECT COUNT(*) FROM flight_posts p WHERE p.user_id = u.id AND p.group_id = ?) AS post_count " +
+      "FROM group_members gm JOIN users u ON u.id = gm.user_id " +
+      "WHERE gm.group_id = ? ORDER BY CASE gm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, u.created_at ASC"
+    ).bind(admin.groupId, admin.groupId).all()
   ]);
-
   return json({
     challenge: challenge,
     posts: posts.results || [],
@@ -663,40 +995,20 @@ async function handleAdminOverview(env) {
         id: row.id,
         username: row.username,
         createdAt: row.created_at,
-        isSuspended: Boolean(row.is_suspended),
+        isSuspended: false,
+        role: row.role,
         postCount: row.post_count || 0,
-        isAdmin: isAdminUser(env, { username: row.username })
+        isAdmin: row.role === "owner" || row.role === "admin"
       };
     })
   });
 }
 
-async function handleAdminDeletePost(env, postId) {
-  const result = await env.DB.prepare("DELETE FROM flight_posts WHERE id = ?").bind(postId).run();
-  if (!result.meta || result.meta.changes < 1) return errorResponse("Post not found.", 404);
+async function handleAdminDeletePost(env, admin, postId) {
+  const result = await env.DB.prepare("DELETE FROM flight_posts WHERE id = ? AND group_id = ?")
+    .bind(postId, admin.groupId).run();
+  if (!result.meta || result.meta.changes < 1) return errorResponse("Post not found in this group.", 404);
   return json({ ok: true });
-}
-
-async function handleAdminUserStatus(env, admin, targetUserId, suspend) {
-  const target = await env.DB.prepare(
-    "SELECT id, username FROM users WHERE id = ?"
-  ).bind(targetUserId).first();
-  if (!target) return errorResponse("User not found.", 404);
-  if (target.id === admin.id || isAdminUser(env, target)) {
-    return errorResponse("An administrator account cannot be kicked or suspended.", 400);
-  }
-
-  if (suspend) {
-    await env.DB.prepare(
-      "INSERT INTO user_moderation (user_id, reason, updated_at) VALUES (?, ?, ?) " +
-      "ON CONFLICT(user_id) DO UPDATE SET reason = excluded.reason, updated_at = excluded.updated_at"
-    ).bind(target.id, "Suspended by administrator", new Date().toISOString()).run();
-    // Existing cookies are also blocked by getSession; delete their sessions immediately as well.
-    await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(target.id).run();
-  } else {
-    await env.DB.prepare("DELETE FROM user_moderation WHERE user_id = ?").bind(target.id).run();
-  }
-  return json({ ok: true, isSuspended: suspend });
 }
 
 async function handleAdminStartChallenge(request, env, admin) {
@@ -706,7 +1018,7 @@ async function handleAdminStartChallenge(request, env, admin) {
     return errorResponse("Choose today or a future date for the challenge start.");
   }
 
-  const current = await readChallengeState(env.DB);
+  const current = await readChallengeState(env.DB, admin.groupId);
   if (current.status === "active" || current.status === "scheduled") {
     return errorResponse("The 360-day challenge is already underway.", 409);
   }
@@ -715,21 +1027,21 @@ async function handleAdminStartChallenge(request, env, admin) {
   end.setUTCDate(end.getUTCDate() + 359);
   const endDate = end.toISOString().slice(0, 10);
   await env.DB.prepare(
-    "UPDATE challenge_settings SET status = 'active', start_date = ?, end_date = ?, ended_at = NULL, " +
-    "updated_at = ?, updated_by = ? WHERE id = 1"
-  ).bind(startDate, endDate, new Date().toISOString(), admin.id).run();
-  return json({ ok: true, challenge: await readChallengeState(env.DB) });
+    "UPDATE group_challenge_settings SET status = 'active', start_date = ?, end_date = ?, ended_at = NULL, " +
+    "updated_at = ?, updated_by = ? WHERE group_id = ?"
+  ).bind(startDate, endDate, new Date().toISOString(), admin.id, admin.groupId).run();
+  return json({ ok: true, challenge: await readChallengeState(env.DB, admin.groupId) });
 }
 
 async function handleAdminEndChallenge(env, admin) {
-  const current = await readChallengeState(env.DB);
+  const current = await readChallengeState(env.DB, admin.groupId);
   if (current.status !== "active" && current.status !== "scheduled") {
     return errorResponse("There is no active challenge to end.", 409);
   }
   await env.DB.prepare(
-    "UPDATE challenge_settings SET status = 'ended', ended_at = ?, updated_at = ?, updated_by = ? WHERE id = 1"
-  ).bind(localToday(), new Date().toISOString(), admin.id).run();
-  return json({ ok: true, challenge: await readChallengeState(env.DB) });
+    "UPDATE group_challenge_settings SET status = 'ended', ended_at = ?, updated_at = ?, updated_by = ? WHERE group_id = ?"
+  ).bind(localToday(), new Date().toISOString(), admin.id, admin.groupId).run();
+  return json({ ok: true, challenge: await readChallengeState(env.DB, admin.groupId) });
 }
 
 function publicPost(row) {
@@ -796,11 +1108,12 @@ async function handleCreatePost(request, env, user) {
   const createdAt = new Date().toISOString();
   await env.DB.prepare(
     "INSERT INTO flight_posts " +
-    "(id, user_id, flight_date, spot, other_spot, planes_json, description, photo_mime, photo_base64, created_at) " +
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "(id, user_id, group_id, flight_date, spot, other_spot, planes_json, description, photo_mime, photo_base64, created_at) " +
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ).bind(
     id,
     user.id,
+    user.groupId,
     flightDate,
     spot,
     otherSpot,
@@ -832,7 +1145,8 @@ async function handleFeed(request, env, user) {
     "COALESCE(up.avatar_base64, '') AS avatar_base64 " +
     "FROM flight_posts p JOIN users u ON u.id = p.user_id " +
     "LEFT JOIN user_profiles up ON up.user_id = u.id WHERE 1 = 1";
-  const bindings = [];
+  const bindings = [user.groupId];
+  sql += " AND p.group_id = ?";
   if (mineOnly) {
     sql += " AND p.user_id = ?";
     bindings.push(user.id);
@@ -877,15 +1191,16 @@ async function routeApi(request, env) {
     return errorResponse("The D1 database is not connected yet. Follow the setup steps in the repository README.", 503);
   }
 
-  // Provision the social feed and admin tables automatically for existing D1 databases.
+  // Provision journal, profile, and group tables before resolving any account session.
   await ensureFlightPostsSchema(env.DB);
   await ensureAdminSchema(env.DB);
   await ensureProfileHangarSchema(env.DB);
+  await ensureGroupSchema(env.DB);
 
   if (method === "GET" && path === "/api/health") {
     try {
       await env.DB.prepare("SELECT 1 AS ok").first();
-      const requiredTables = ["users", "sessions", "flights", "rate_limits", "flight_posts", "user_moderation", "challenge_settings", "user_profiles", "hangar_planes"];
+      const requiredTables = ["users", "sessions", "flights", "rate_limits", "flight_posts", "user_moderation", "challenge_settings", "user_profiles", "hangar_planes", "groups", "group_members", "group_bans", "group_challenge_settings", "app_migrations"];
       const tableRows = await env.DB.prepare(
         "SELECT name FROM sqlite_master WHERE type = 'table'"
       ).all();
@@ -928,31 +1243,92 @@ async function routeApi(request, env) {
 
   if (method === "GET" && path === "/api/me") {
     const user = await getSession(request, env.DB);
-    return json({
-      user: user ? { id: user.id, username: user.username, isAdmin: isAdminUser(env, user) } : null
-    });
+    return json({ user: user ? publicUserIdentity(user) : null });
+  }
+
+  if (method === "GET" && path === "/api/group") {
+    const auth = await requireUser(request, env.DB);
+    if (auth.response) return auth.response;
+    return handleGetGroup(env, auth.user);
+  }
+
+  if (method === "POST" && path === "/api/groups/create") {
+    const auth = await requireUser(request, env.DB);
+    if (auth.response) return auth.response;
+    return handleCreateGroup(request, env, auth.user);
+  }
+
+  if (method === "POST" && path === "/api/groups/join") {
+    const auth = await requireUser(request, env.DB);
+    if (auth.response) return auth.response;
+    return handleJoinGroup(request, env, auth.user);
+  }
+
+  if (method === "POST" && path === "/api/group/leave") {
+    const auth = await requireUser(request, env.DB);
+    if (auth.response) return auth.response;
+    return handleLeaveGroup(env, auth.user);
+  }
+
+  if (method === "POST" && path === "/api/group/settings") {
+    const auth = await requireGroupOwner(request, env);
+    if (auth.response) return auth.response;
+    return handleUpdateGroup(request, env, auth.user);
+  }
+
+  if (method === "POST" && path === "/api/group/invite-code") {
+    const auth = await requireGroupOwner(request, env);
+    if (auth.response) return auth.response;
+    return handleRegenerateGroupCode(env, auth.user);
+  }
+
+  const groupRoleMatch = path.match(/^\/api\/group\/members\/([A-Za-z0-9_-]{10,40})\/role$/);
+  if (method === "POST" && groupRoleMatch) {
+    const auth = await requireGroupOwner(request, env);
+    if (auth.response) return auth.response;
+    return handleChangeGroupRole(request, env, auth.user, groupRoleMatch[1]);
+  }
+
+  const groupKickMatch = path.match(/^\/api\/group\/members\/([A-Za-z0-9_-]{10,40})\/kick$/);
+  if (method === "POST" && groupKickMatch) {
+    const auth = await requireAdmin(request, env);
+    if (auth.response) return auth.response;
+    return handleKickGroupMember(env, auth.user, groupKickMatch[1]);
+  }
+
+  const groupUnbanMatch = path.match(/^\/api\/group\/bans\/([A-Za-z0-9_-]{10,40})\/restore$/);
+  if (method === "POST" && groupUnbanMatch) {
+    const auth = await requireGroupOwner(request, env);
+    if (auth.response) return auth.response;
+    return handleUnbanGroupMember(env, auth.user, groupUnbanMatch[1]);
+  }
+
+  if (method === "POST" && path === "/api/group/transfer") {
+    const auth = await requireGroupOwner(request, env);
+    if (auth.response) return auth.response;
+    return handleTransferGroupOwnership(request, env, auth.user);
   }
 
   if (method === "GET" && path === "/api/settings") {
-    const auth = await requireUser(request, env.DB);
+    const auth = await requireGroup(request, env.DB);
     if (auth.response) return auth.response;
     return handleGetSettings(env, auth.user);
   }
 
   if (method === "POST" && path === "/api/settings") {
-    const auth = await requireUser(request, env.DB);
+    const auth = await requireGroup(request, env.DB);
     if (auth.response) return auth.response;
     return handleUpdateSettings(request, env, auth.user);
   }
 
   if (method === "GET" && path === "/api/participants") {
-    const auth = await requireUser(request, env.DB);
+    const auth = await requireGroup(request, env.DB);
     if (auth.response) return auth.response;
     return handleParticipants(env);
   }
 
   if (method === "GET" && path === "/api/hangar") {
-    const auth = await requireUser(request, env.DB);
+    const auth = await requireGroup(request, env.DB);
     if (auth.response) return auth.response;
     const targetUserId = new URL(request.url).searchParams.get("userId") || auth.user.id;
     if (!/^[A-Za-z0-9_-]{10,40}$/.test(targetUserId)) return errorResponse("Invalid participant ID.");
@@ -960,13 +1336,13 @@ async function routeApi(request, env) {
   }
 
   if (method === "POST" && path === "/api/hangar") {
-    const auth = await requireUser(request, env.DB);
+    const auth = await requireGroup(request, env.DB);
     if (auth.response) return auth.response;
     return handleCreateHangarPlane(request, env, auth.user);
   }
 
   if (method === "DELETE" && path.indexOf("/api/hangar/") === 0) {
-    const auth = await requireUser(request, env.DB);
+    const auth = await requireGroup(request, env.DB);
     if (auth.response) return auth.response;
     const planeId = path.slice("/api/hangar/".length);
     if (!/^[A-Za-z0-9_-]{10,40}$/.test(planeId)) return errorResponse("Invalid aircraft ID.");
@@ -974,15 +1350,15 @@ async function routeApi(request, env) {
   }
 
   if (method === "GET" && path === "/api/challenge") {
-    const auth = await requireUser(request, env.DB);
+    const auth = await requireGroup(request, env.DB);
     if (auth.response) return auth.response;
-    return handleChallengeStatus(env);
+    return handleChallengeStatus(env, auth.user);
   }
 
   if (method === "GET" && path === "/api/admin/overview") {
     const auth = await requireAdmin(request, env);
     if (auth.response) return auth.response;
-    return handleAdminOverview(env);
+    return handleAdminOverview(env, auth.user);
   }
 
   if (method === "POST" && path === "/api/admin/challenge/start") {
@@ -1002,42 +1378,42 @@ async function routeApi(request, env) {
     if (auth.response) return auth.response;
     const postId = path.slice("/api/admin/posts/".length);
     if (!/^[A-Za-z0-9_-]{10,40}$/.test(postId)) return errorResponse("Invalid post ID.");
-    return handleAdminDeletePost(env, postId);
+    return handleAdminDeletePost(env, auth.user, postId);
   }
 
-  const adminUserMatch = path.match(/^\/api\/admin\/users\/([A-Za-z0-9_-]{10,40})\/(suspend|restore)$/);
+  const adminUserMatch = path.match(/^\/api\/admin\/users\/([A-Za-z0-9_-]{10,40})\/kick$/);
   if (method === "POST" && adminUserMatch) {
     const auth = await requireAdmin(request, env);
     if (auth.response) return auth.response;
-    return handleAdminUserStatus(env, auth.user, adminUserMatch[1], adminUserMatch[2] === "suspend");
+    return handleKickGroupMember(env, auth.user, adminUserMatch[1]);
   }
 
   if (method === "GET" && path === "/api/feed") {
-    const auth = await requireUser(request, env.DB);
+    const auth = await requireGroup(request, env.DB);
     if (auth.response) return auth.response;
     return handleFeed(request, env, auth.user);
   }
 
   if (method === "POST" && path === "/api/posts") {
-    const auth = await requireUser(request, env.DB);
+    const auth = await requireGroup(request, env.DB);
     if (auth.response) return auth.response;
     return handleCreatePost(request, env, auth.user);
   }
 
   if (method === "GET" && path === "/api/dashboard") {
-    const auth = await requireUser(request, env.DB);
+    const auth = await requireGroup(request, env.DB);
     if (auth.response) return auth.response;
     return handleDashboard(env, auth.user);
   }
 
   if (method === "POST" && path === "/api/flights") {
-    const auth = await requireUser(request, env.DB);
+    const auth = await requireGroup(request, env.DB);
     if (auth.response) return auth.response;
     return handleCreateFlight(request, env, auth.user);
   }
 
   if (method === "DELETE" && path.indexOf("/api/flights/") === 0) {
-    const auth = await requireUser(request, env.DB);
+    const auth = await requireGroup(request, env.DB);
     if (auth.response) return auth.response;
     const flightId = path.slice("/api/flights/".length);
     if (!/^[A-Za-z0-9_-]{10,40}$/.test(flightId)) return errorResponse("Invalid flight ID.");
