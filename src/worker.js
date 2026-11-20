@@ -1142,6 +1142,19 @@ async function handleCreatePost(request, env, user) {
     return errorResponse("Please upload a smaller, valid photo (maximum 320 KB after compression).");
   }
 
+  const hangarResult = await env.DB.prepare(
+    "SELECT name FROM hangar_planes WHERE user_id = ?"
+  ).bind(user.id).all();
+  const hangarNames = new Set((hangarResult.results || []).map(function (row) {
+    return String(row.name || "").toLowerCase();
+  }));
+  const missingPlane = cleanPlanes.find(function (name) {
+    return !hangarNames.has(name.toLowerCase());
+  });
+  if (missingPlane) {
+    return errorResponse("“" + missingPlane + "” is not in your Hangar. Add it to your Hangar before logging this flight.");
+  }
+
   const id = randomId();
   const createdAt = new Date().toISOString();
   await env.DB.prepare(
