@@ -30,7 +30,8 @@ function renderDashboardGreeting(username) {
   if (element) element.textContent = greeting.replace("{username}", username || "pilot");
 }
 let selectedPlanes = [];
-let knownPlanes = [];
+let flightHangarPlanes = [];
+let flightPlanesLoadToken = 0;
 let selectedPhotoBase64 = "";
 let selectedFunPhotoBase64 = "";
 let selectedHangarPhotoBase64 = "";
@@ -342,7 +343,6 @@ async function loadMyLogs() {
     } else {
       $("#my-posts-list").innerHTML = result.posts.map(renderPost).join("");
     }
-    updatePlaneSuggestions(dashboard.knownPlanes || []);
   } catch (error) {
     showMessage($("#my-logs-message"), error.message, false);
   }
@@ -688,13 +688,6 @@ async function handleAvatarPhotoSelection(file) {
     showMessage($("#settings-avatar-message"), error.message, false);
   }
 }
-function updatePlaneSuggestions(planes) {
-  knownPlanes = Array.isArray(planes) ? planes : [];
-  $("#plane-suggestions").innerHTML = knownPlanes
-    .map(function (plane) { return '<option value="' + escapeHtml(plane) + '"></option>'; })
-    .join("");
-}
-
 function startFeedPolling() {
   if (feedPollTimer) clearInterval(feedPollTimer);
   feedPollTimer = setInterval(function () {
@@ -761,6 +754,7 @@ function switchView(view) {
   const isSettings = view === "settings";
   const isGroup = view === "group";
   const isAdminView = view === "admin";
+  if (!isLog) flightPlanesLoadToken += 1;
   $("#feed-view").hidden = !isFeed;
   $("#my-logs-view").hidden = !isMine;
   $("#log-view").hidden = !isLog;
@@ -801,9 +795,12 @@ function switchView(view) {
   if (isGroup) loadGroupPanel();
   if (isAdminView) loadAdminPanel();
   if (isLog) {
+    selectedPlanes = [];
+    renderSelectedPlanes();
     $("#post-flight-date").value = localDate();
     showMessage($("#post-message"), "", false);
     showMessage($("#photo-message"), "", false);
+    loadFlightPlaneOptions();
   }
   if (isFunPost) {
     showMessage($("#fun-post-message"), "", false);
@@ -814,36 +811,57 @@ function switchView(view) {
 function renderSelectedPlanes() {
   const container = $("#selected-planes");
   if (!selectedPlanes.length) {
-    container.innerHTML = '<span id="no-planes-message" class="no-planes-message">No planes added yet.</span>';
+    container.textContent = "No aircraft selected yet.";
+    container.classList.remove("has-selection");
     return;
   }
-  container.innerHTML = selectedPlanes.map(function (plane, index) {
-    return '<span class="plane-pill">' + escapeHtml(plane) +
-      '<button type="button" data-remove-plane="' + index + '" aria-label="Remove ' + escapeHtml(plane) + '">×</button></span>';
+  container.textContent = selectedPlanes.length + " of 8 selected · " + selectedPlanes.join(", ");
+  container.classList.add("has-selection");
+}
+
+function renderFlightPlaneOptions() {
+  const container = $("#flight-plane-options");
+  if (!flightHangarPlanes.length) {
+    container.innerHTML =
+      '<div class="flight-plane-empty">' +
+        '<strong>Your Hangar is empty</strong>' +
+        '<p>Add aircraft to your Hangar first. You can then return here and select the ones you flew.</p>' +
+        '<button id="open-hangar-from-log" class="button button-quiet" type="button">Open my Hangar</button>' +
+      '</div>';
+    return;
+  }
+  container.innerHTML = flightHangarPlanes.map(function (plane) {
+    const isSelected = selectedPlanes.some(function (name) {
+      return name.toLowerCase() === String(plane.name || "").toLowerCase();
+    });
+    const visual = plane.photo_base64
+      ? '<img class="flight-plane-thumb" src="data:image/jpeg;base64,' + escapeHtml(plane.photo_base64) + '" alt="">'
+      : '<span class="flight-plane-thumb flight-plane-thumb-empty" aria-hidden="true">✈</span>';
+    const details = plane.description ? '<small>' + escapeHtml(plane.description) + '</small>' : "";
+    return '<label class="flight-plane-option' + (isSelected ? ' selected' : '') + '">' +
+      '<input type="checkbox" data-flight-plane="' + escapeHtml(plane.name) + '"' + (isSelected ? ' checked' : '') + '>' +
+      visual +
+      '<span class="flight-plane-option-copy"><strong>' + escapeHtml(plane.name) + '</strong>' + details + '</span>' +
+    '</label>';
   }).join("");
 }
 
-function addPlane() {
-  const input = $("#plane-input");
-  const plane = input.value.trim();
-  if (plane.length < 2 || plane.length > 60) {
-    showMessage($("#post-message"), "Plane names must be 2–60 characters.", false);
-    input.focus();
-    return;
+async function loadFlightPlaneOptions() {
+  if (!currentUser) return;
+  const requestToken = ++flightPlanesLoadToken;
+  const container = $("#flight-plane-options");
+  container.innerHTML = '<p class="muted">Loading aircraft from your Hangar…</p>';
+  flightHangarPlanes = [];
+  try {
+    const result = await api("/api/hangar?userId=" + encodeURIComponent(currentUser.id));
+    if (requestToken !== flightPlanesLoadToken || $("#log-view").hidden) return;
+    if (!result.isMine) throw new Error("Your Hangar could not be loaded. Please reopen the flight form.");
+    flightHangarPlanes = Array.isArray(result.planes) ? result.planes : [];
+    renderFlightPlaneOptions();
+  } catch (error) {
+    if (requestToken !== flightPlanesLoadToken || $("#log-view").hidden) return;
+    container.innerHTML = '<p class="flight-plane-error">' + escapeHtml(error.message) + '</p>';
   }
-  if (selectedPlanes.length >= 8) {
-    showMessage($("#post-message"), "You can add up to eight planes to one post.", false);
-    return;
-  }
-  if (selectedPlanes.some(function (item) { return item.toLowerCase() === plane.toLowerCase(); })) {
-    showMessage($("#post-message"), "That plane is already selected.", false);
-    input.value = "";
-    return;
-  }
-  selectedPlanes.push(plane);
-  input.value = "";
-  renderSelectedPlanes();
-  showMessage($("#post-message"), "", false);
 }
 
 function clearPhoto() {
@@ -1045,7 +1063,6 @@ async function refreshMyStats() {
     $("#stat-posts").textContent = String(dashboard.totalPosts);
     $("#stat-days").textContent = String(dashboard.flyingDays);
     $("#stat-planes").textContent = String(dashboard.uniquePlanes);
-    updatePlaneSuggestions(dashboard.knownPlanes || []);
   } catch (_error) {
     // The view will show an error when its main feed request is made.
   }
@@ -1485,22 +1502,30 @@ $("#flying-spot").addEventListener("change", function () {
   if (!isOther) $("#other-spot").value = "";
 });
 
-$("#add-plane-button").addEventListener("click", addPlane);
-$("#plane-input").addEventListener("keydown", function (event) {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    addPlane();
-  }
+$("#flight-plane-options").addEventListener("change", function (event) {
+  const checkbox = event.target.closest("[data-flight-plane]");
+  if (!checkbox) return;
+  const planeName = checkbox.getAttribute("data-flight-plane") || "";
+  const selectedIndex = selectedPlanes.findIndex(function (name) { return name.toLowerCase() === planeName.toLowerCase(); });
+  if (checkbox.checked) {
+    if (selectedIndex === -1 && selectedPlanes.length >= 8) {
+      checkbox.checked = false;
+      showMessage($("#post-message"), "You can select up to eight aircraft for one flight log.", false);
+      return;
+    }
+    if (selectedIndex === -1) selectedPlanes.push(planeName);
+  } else if (selectedIndex !== -1) selectedPlanes.splice(selectedIndex, 1);
+  const card = checkbox.closest(".flight-plane-option");
+  if (card) card.classList.toggle("selected", checkbox.checked);
+  renderSelectedPlanes();
+  showMessage($("#post-message"), "", false);
 });
 
-$("#selected-planes").addEventListener("click", function (event) {
-  const button = event.target.closest("[data-remove-plane]");
-  if (!button) return;
-  const index = Number(button.getAttribute("data-remove-plane"));
-  if (Number.isInteger(index) && index >= 0 && index < selectedPlanes.length) {
-    selectedPlanes.splice(index, 1);
-    renderSelectedPlanes();
-  }
+$("#flight-plane-options").addEventListener("click", function (event) {
+  if (!event.target.closest("#open-hangar-from-log")) return;
+  activeHangarUserId = currentUser.id;
+  activeHangarUsername = currentUser.username;
+  switchView("hangar");
 });
 
 $("#post-photo").addEventListener("change", function () {
@@ -1520,8 +1545,8 @@ $("#post-form").addEventListener("submit", async function (event) {
   showMessage($("#post-message"), "", false);
 
   if (!selectedPlanes.length) {
-    showMessage($("#post-message"), "Please add at least one plane.", false);
-    $("#plane-input").focus();
+    showMessage($("#post-message"), "Please select at least one aircraft from your Hangar.", false);
+    $("#flight-plane-options").focus();
     return;
   }
   if (!selectedPhotoBase64) {
