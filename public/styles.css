@@ -881,3 +881,30 @@ html[data-theme="dark"] .flight-plane-error { color:#e59b94; }
   .flight-plane-option { grid-template-columns:20px 50px minmax(0,1fr); padding:10px; }
   .flight-plane-thumb { width:50px; height:44px; }
 }
+
+
+/* Clear recovery state when the Hangar cannot be loaded for the flight form. */
+.flight-plane-error-state {
+  grid-column: 1 / -1;
+  padding: 18px;
+  border: 1px solid #e4c8c5;
+  border-radius: 12px;
+  background: #fff8f7;
+}
+.flight-plane-error-state strong { color: #8d4640; font-size: 13px; }
+.flight-plane-error-state p {
+  margin: 6px 0 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.flight-plane-error-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+html[data-theme="dark"] .flight-plane-error-state {
+  border-color: #654744;
+  background: #2b2021;
+}
+html[data-theme="dark"] .flight-plane-error-state strong { color: #f0aaa2; }
+@media (max-width: 520px) {
+  .flight-plane-error-actions { flex-direction: column; }
+  .flight-plane-error-actions .button { width: 100%; }
+}
