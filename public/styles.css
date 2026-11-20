@@ -671,7 +671,24 @@ html[data-theme="dark"] .nav-tab.active {
 .group-settings-fields .field { margin: 0; }
 .group-settings-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 13px; }
 .group-settings-actions .form-message { margin: 0; }
-.group-members-panel .admin-list { margin-top: 15px; }
+.group-members-primary { padding: 22px; }
+.group-members-primary .admin-panel-heading { align-items: center; }
+.group-members-primary .admin-panel-heading .muted { margin: 6px 0 0; }
+.group-members-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 17px; }
+.group-member-card { display: flex; min-width: 0; flex-direction: column; gap: 12px; padding: 15px; border: 1px solid var(--line); border-radius: 13px; background: var(--panel); }
+.group-member-identity { display: flex; min-width: 0; align-items: center; gap: 11px; }
+.group-member-avatar { display: grid; width: 54px; height: 54px; flex: 0 0 54px; overflow: hidden; place-items: center; border: 2px solid #dbe8ef; border-radius: 50%; background: #eaf2f7; color: #326b8e; font-size: 20px; font-weight: 850; object-fit: cover; }
+.group-member-copy { display: flex; min-width: 0; flex-direction: column; gap: 5px; }
+.group-member-copy strong { overflow: hidden; color: var(--navy); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.group-member-role { align-self: flex-start; padding: 4px 8px; border-radius: 20px; background: #edf2f5; color: #667985; font-size: 9px; font-weight: 800; }
+.group-member-role[data-role="owner"] { background: #eaf4ed; color: #467454; }
+.group-member-role[data-role="admin"] { background: #edf1fb; color: #526b9b; }
+.group-member-hangar { width: 100%; min-height: 36px; }
+.group-member-admin-actions { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.group-member-admin-actions .button { flex: 1 1 auto; min-height: 30px; padding: 0 8px; font-size: 9px; }
+.group-leave-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.group-leave-row .form-message { margin: 0; }
+.group-owner-transfer-note { margin: -8px 0 0; color: var(--muted); font-size: 10px; }
 .group-leave-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .group-leave-row .form-message { margin: 0; }
 .group-owner-transfer-note { margin: -8px 0 0; color: var(--muted); font-size: 10px; }
@@ -687,11 +704,26 @@ html[data-theme="dark"] .group-members-panel { background: #1b2a35; border-color
 html[data-theme="dark"] .group-invite-copy h3,
 html[data-theme="dark"] .group-settings-panel h3,
 html[data-theme="dark"] .group-members-panel h3 { color: #e4edf3; }
+html[data-theme="dark"] .group-member-card { border-color: #344653; background: #162630; }
+html[data-theme="dark"] .group-member-avatar { border-color: #405d6e; background: #294556; color: #bfe1f5; }
+html[data-theme="dark"] .group-member-copy strong { color: #e4edf3; }
+html[data-theme="dark"] .group-member-role { background: #293b46; color: #becbd3; }
+html[data-theme="dark"] .group-member-role[data-role="owner"] { background: #203d31; color: #a7d8ba; }
+html[data-theme="dark"] .group-member-role[data-role="admin"] { background: #2a3852; color: #c1d0f2; }
+html[data-theme="dark"] .group-member-admin-actions { border-top-color: #344653; }
 html[data-theme="dark"] .group-code { border-color: #52738a; background: #233e50; color: #d5e9f6; }
 html[data-theme="dark"] .group-capacity-row,
 html[data-theme="dark"] .group-owner-transfer-note { color: #a0afba; }
 
+@media (max-width: 920px) {
+  .group-members-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 720px) {
+  .group-members-primary { padding: 17px; }
+  .group-members-grid { grid-template-columns: 1fr; gap: 9px; margin-top: 13px; }
+  .group-member-card { padding: 13px; }
+  .group-member-identity { gap: 10px; }
+  .group-member-avatar { width: 48px; height: 48px; flex-basis: 48px; }
   .group-setup-section { margin-top: 5px; }
   .group-setup-heading { margin-bottom: 18px; text-align: left; }
   .group-setup-heading .muted { margin: 0; }
