@@ -600,3 +600,104 @@ html[data-theme="dark"] .nav-tab.active {
   .nav-tab { font-size: 8px; }
   .nav-icon { width: 17px; height: 17px; }
 }
+
+
+/* Group creation, invite management, and group administration */
+.group-setup-section {
+  width: min(900px, 100%);
+  margin: 25px auto 55px;
+}
+.group-setup-heading { max-width: 650px; margin: 0 auto 24px; text-align: center; }
+.group-setup-heading h1 { margin: 7px 0 9px; color: var(--navy); font-size: clamp(30px, 5vw, 43px); letter-spacing: -.045em; }
+.group-setup-heading .muted { max-width: 540px; margin: 0 auto; line-height: 1.6; }
+.group-setup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; }
+.group-setup-card { padding: 24px; }
+.group-setup-card-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 18px;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-size: 24px;
+  font-weight: 650;
+}
+.group-setup-card h2 { margin: 5px 0 8px; color: var(--navy); font-size: 22px; letter-spacing: -.03em; }
+.group-setup-card > .muted { min-height: 47px; margin: 0 0 18px; line-height: 1.55; }
+.group-setup-card form { display: flex; flex-direction: column; gap: 13px; }
+.group-setup-card .field { margin: 0; }
+.group-setup-card .button { margin-top: 3px; }
+.group-join-hint { display: flex; align-items: flex-start; gap: 8px; padding: 10px 11px; border-radius: 8px; background: var(--blue-soft); color: var(--muted); font-size: 10px; line-height: 1.5; }
+.group-join-hint-icon { flex: 0 0 auto; color: var(--blue); font-weight: 850; }
+#group-setup-signout { display: block; margin: 18px auto 0; }
+.group-view { display: flex; flex-direction: column; gap: 16px; }
+.group-invite-panel, .group-settings-panel, .group-members-panel { padding: 20px; }
+.group-invite-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 13px 20px; }
+.group-invite-copy .eyebrow { margin: 0 0 6px; }
+.group-invite-copy h3, .group-settings-panel h3, .group-members-panel h3 { margin: 0; color: var(--navy); font-size: 17px; letter-spacing: -.02em; }
+.group-invite-copy .muted { margin: 6px 0 0; line-height: 1.45; }
+.group-code-row { display: flex; align-items: center; gap: 9px; }
+.group-code {
+  display: inline-flex;
+  min-width: 130px;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 13px;
+  border: 1px dashed #8eb1c7;
+  border-radius: 9px;
+  background: var(--blue-soft);
+  color: var(--navy);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 17px;
+  letter-spacing: .12em;
+}
+.group-capacity-row { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 10px; }
+.group-regenerate-code, #group-regenerate-code { justify-self: end; }
+.group-settings-panel .muted, .group-members-panel > .muted { margin: 7px 0 0; line-height: 1.55; }
+.group-settings-fields { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(120px, .7fr); gap: 13px; margin-top: 16px; }
+.group-settings-fields .field { margin: 0; }
+.group-settings-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 13px; }
+.group-settings-actions .form-message { margin: 0; }
+.group-members-panel .admin-list { margin-top: 15px; }
+.group-leave-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.group-leave-row .form-message { margin: 0; }
+.group-owner-transfer-note { margin: -8px 0 0; color: var(--muted); font-size: 10px; }
+.group-setup-section .form-message { text-align: center; }
+
+html[data-theme="dark"] .group-setup-heading h1,
+html[data-theme="dark"] .group-setup-card h2 { color: #e4edf3; }
+html[data-theme="dark"] .group-setup-card-icon { background: #294556; color: #9bcdef; }
+html[data-theme="dark"] .group-join-hint { background: #213b4c; color: #a8bfce; }
+html[data-theme="dark"] .group-invite-panel,
+html[data-theme="dark"] .group-settings-panel,
+html[data-theme="dark"] .group-members-panel { background: #1b2a35; border-color: #344653; }
+html[data-theme="dark"] .group-invite-copy h3,
+html[data-theme="dark"] .group-settings-panel h3,
+html[data-theme="dark"] .group-members-panel h3 { color: #e4edf3; }
+html[data-theme="dark"] .group-code { border-color: #52738a; background: #233e50; color: #d5e9f6; }
+html[data-theme="dark"] .group-capacity-row,
+html[data-theme="dark"] .group-owner-transfer-note { color: #a0afba; }
+
+@media (max-width: 720px) {
+  .group-setup-section { margin-top: 5px; }
+  .group-setup-heading { margin-bottom: 18px; text-align: left; }
+  .group-setup-heading .muted { margin: 0; }
+  .group-setup-grid { grid-template-columns: 1fr; gap: 13px; }
+  .group-setup-card { padding: 19px; }
+  .group-setup-card > .muted { min-height: 0; }
+  .group-invite-panel { grid-template-columns: 1fr; gap: 12px; }
+  .group-code-row { justify-content: flex-start; flex-wrap: wrap; }
+  .group-capacity-row { margin-top: -2px; }
+  .group-settings-fields { grid-template-columns: 1fr 125px; gap: 9px; }
+  .group-settings-actions { align-items: flex-start; flex-direction: column; }
+  .group-settings-actions .button { width: 100%; }
+  .group-leave-row { align-items: flex-start; flex-direction: column; }
+}
+@media (max-width: 390px) {
+  .group-setup-heading h1 { font-size: 31px; }
+  .group-settings-fields { grid-template-columns: 1fr; }
+  .group-code { min-width: 118px; font-size: 15px; }
+}
