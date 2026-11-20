@@ -775,3 +775,50 @@ html[data-theme="dark"] .group-owner-transfer-note { color: #a0afba; }
   font-weight: 700;
   letter-spacing: .08em;
 }
+
+/* Group-first dashboard heading and rotating welcome message. */
+.dashboard-heading-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+#dashboard-group-name {
+  max-width: 100%;
+  margin: 0;
+  color: var(--navy);
+  font-size: clamp(38px, 4.8vw, 56px);
+  line-height: 1.04;
+  letter-spacing: -.055em;
+  overflow-wrap: anywhere;
+}
+.dashboard-greeting {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+@media (max-width: 720px) {
+  .page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+  #dashboard-group-name {
+    font-size: clamp(30px, 6.2vw, 41px);
+  }
+  .dashboard-greeting {
+    margin-top: 11px;
+    font-size: 13px;
+  }
+  .page-heading-actions {
+    width: 100%;
+    align-items: stretch;
+    justify-content: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .page-heading-actions .button {
+    min-height: 40px;
+    flex: 1 1 125px;
+  }
+}
