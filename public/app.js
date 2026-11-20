@@ -165,7 +165,7 @@ function showSignedIn(user) {
   const hasGroup = Boolean(user.groupId);
   $("#auth-section").hidden = true;
   $("#group-setup-section").hidden = hasGroup;
-  $("#app-section").hidden = !hasGroup;
+  $("#app-section").hidden = !hasGroup || !currentGroup;
   $("#account-area").hidden = false;
   $("#account-name").textContent = user.username;
   renderDashboardGreeting(user.username);
@@ -470,6 +470,7 @@ async function loadAdminPanel() {
 
 function renderGroupPanel(group) {
   currentGroup = group;
+  $("#app-section").hidden = false;
   $("#dashboard-group-name").textContent = group.name;
   $("#group-heading").textContent = group.name;
   $("#group-subtitle").textContent = group.isOwner
@@ -541,6 +542,10 @@ async function loadGroupPanel() {
     }
     renderGroupPanel(result.group);
   } catch (error) {
+    if (currentUser && currentUser.groupId) {
+      $("#app-section").hidden = false;
+      $("#dashboard-group-name").textContent = currentGroup ? currentGroup.name : "Your group";
+    }
     showMessage($("#group-message"), error.message, false);
   }
 }
@@ -1052,6 +1057,7 @@ async function checkSession() {
       const previousGroupId = currentUser ? currentUser.groupId : null;
       const nextGroupId = result.user.groupId || null;
       if (previousGroupId !== nextGroupId) {
+        currentGroup = null;
         stopFeedPolling();
         feedState = { posts: [], hasMore: false, nextCursor: null, loading: false };
         activeHangarUserId = null;
