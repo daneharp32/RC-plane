@@ -1020,6 +1020,16 @@ async function checkSession() {
   try {
     const result = await api("/api/me");
     if (result.user) {
+      const previousGroupId = currentUser ? currentUser.groupId : null;
+      const nextGroupId = result.user.groupId || null;
+      if (previousGroupId !== nextGroupId) {
+        stopFeedPolling();
+        feedState = { posts: [], hasMore: false, nextCursor: null, loading: false };
+        participantsCache = [];
+        activeHangarUserId = null;
+        activeHangarUsername = "";
+        activeHangarIsMine = true;
+      }
       showSignedIn(result.user);
       if (!result.user.groupId) {
         showMessage($("#group-setup-message"), "Create a group or enter an invite code to join your friends.", false);
