@@ -472,7 +472,7 @@ function renderGroupPanel(group) {
   currentGroup = group;
   $("#app-section").hidden = false;
   $("#dashboard-group-name").textContent = group.name;
-  $("#group-heading").textContent = group.name;
+  $("#group-heading").textContent = "Your flight crew";
   $("#group-subtitle").textContent = group.isOwner
     ? "You're the owner of this group. Invite friends and manage its settings."
     : (group.canManage ? "You're a group administrator. You can help manage the crew." : "Your group home, invite code, and flight crew.");
