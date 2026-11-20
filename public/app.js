@@ -489,35 +489,33 @@ function renderGroupPanel(group) {
   $("#group-members-count").textContent = String(members.length);
   $("#group-members-list").innerHTML = members.map(function (member) {
     const isSelf = member.id === currentUser.id;
-    let roleLabel = member.role === "owner" ? "Owner" : (member.role === "admin" ? "Administrator" : "Member");
-    let actions = '<span class="admin-protected-label">' + (isSelf ? "You" : roleLabel) + '</span>';
+    const roleLabel = member.role === "owner" ? "Owner" : (member.role === "admin" ? "Administrator" : "Member");
+    let adminActions = "";
     if (!isSelf && group.isOwner && member.role !== "owner") {
       const nextRole = member.role === "admin" ? "member" : "admin";
       const roleText = member.role === "admin" ? "Remove admin" : "Make admin";
-      actions = '<div class="admin-list-actions">' +
-        '<button class="button button-quiet" type="button" data-group-role="' + nextRole +
+      adminActions = '<div class="group-member-admin-actions">' +
+        '<button class="button button-quiet button-small" type="button" data-group-role="' + nextRole +
         '" data-group-user-id="' + escapeHtml(member.id) + '" data-group-user-name="' + escapeHtml(member.username) + '">' +
         roleText + '</button>' +
-        '<button class="button button-quiet" type="button" data-group-transfer-owner="' + escapeHtml(member.id) +
-        '" data-group-user-name="' + escapeHtml(member.username) + '">Transfer</button>' +
-        '<button class="button button-quiet danger-button" type="button" data-group-kick="' + escapeHtml(member.id) +
-        '" data-group-user-name="' + escapeHtml(member.username) + '">Kick</button></div>';
+        '<button class="button button-quiet button-small" type="button" data-group-transfer-owner="' + escapeHtml(member.id) +
+        '" data-group-user-name="' + escapeHtml(member.username) + '">Transfer owner</button>' +
+        '<button class="button button-quiet button-small danger-button" type="button" data-group-kick="' + escapeHtml(member.id) +
+        '" data-group-user-name="' + escapeHtml(member.username) + '">Remove</button></div>';
     } else if (!isSelf && group.canManage && member.role === "member") {
-      actions = '<div class="admin-list-actions"><button class="button button-quiet danger-button" type="button" data-group-kick="' +
-        escapeHtml(member.id) + '" data-group-user-name="' + escapeHtml(member.username) + '">Kick</button></div>';
+      adminActions = '<div class="group-member-admin-actions"><button class="button button-quiet button-small danger-button" type="button" data-group-kick="' +
+        escapeHtml(member.id) + '" data-group-user-name="' + escapeHtml(member.username) + '">Remove</button></div>';
     }
-    if (!isSelf) {
-      const viewHangar = '<button class="button button-quiet button-small" type="button" data-group-view-hangar="' +
-        escapeHtml(member.id) + '" data-group-view-hangar-name="' + escapeHtml(member.username) + '">View Hangar</button>';
-      if (actions.indexOf('<div class="admin-list-actions">') === 0) {
-        actions = actions.replace('</div>', viewHangar + '</div>');
-      } else {
-        actions = '<div class="admin-list-actions">' + actions + viewHangar + '</div>';
-      }
-    }
-    return '<div class="admin-list-row"><div class="admin-list-copy"><strong>' +
-      escapeHtml(member.username) + '</strong><small>' + escapeHtml(roleLabel) + '</small></div>' +
-      actions + '</div>';
+    return '<article class="group-member-card">' +
+      '<div class="group-member-identity">' +
+        avatarMarkup(member.avatarBase64 || "", member.username, "group-member-avatar") +
+        '<div class="group-member-copy"><strong>' + escapeHtml(member.username) + '</strong>' +
+          '<span class="group-member-role" data-role="' + escapeHtml(member.role) + '">' + escapeHtml(roleLabel) + '</span></div>' +
+      '</div>' +
+      '<button class="button button-primary group-member-hangar" type="button" data-group-view-hangar="' +
+        escapeHtml(member.id) + '" data-group-view-hangar-name="' + escapeHtml(member.username) + '">View Hangar</button>' +
+      adminActions +
+    '</article>';
   }).join("");
 
   const banned = Array.isArray(group.bannedUsers) ? group.bannedUsers : [];
@@ -533,7 +531,7 @@ function renderGroupPanel(group) {
 async function loadGroupPanel() {
   if (!currentUser || !currentUser.groupId) return;
   showMessage($("#group-message"), "", false);
-  $("#group-members-list").innerHTML = '<p class="muted">Loading participants…</p>';
+  $("#group-members-list").innerHTML = '<p class="muted">Loading group members…</p>';
   try {
     const result = await api("/api/group");
     if (!result.group) {
