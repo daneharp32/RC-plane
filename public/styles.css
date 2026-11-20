@@ -756,3 +756,22 @@ html[data-theme="dark"] .group-owner-transfer-note { color: #a0afba; }
 @media (max-width: 720px) {
   #group-heading { font-size: clamp(30px, 8vw, 38px); }
 }
+
+/* Compact two-line Flyers branding in the footer. */
+.footer-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  letter-spacing: .08em;
+}
+.footer-brand strong {
+  color: var(--navy);
+  font-size: 11px;
+  font-weight: 850;
+}
+.footer-brand small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
