@@ -3,6 +3,32 @@ const $ = function (selector) { return document.querySelector(selector); };
 let authMode = "login";
 let currentUser = null;
 let currentGroup = null;
+
+const dashboardGreetingMessages = [
+  "Welcome, {username}!",
+  "Good flying, {username}?",
+  "Good day, {username}!",
+  "Batteries charged, {username}?"
+];
+let dashboardGreetingIndex = 0;
+
+try {
+  const savedGreetingIndex = Number.parseInt(localStorage.getItem("flyers-greeting-cycle"), 10);
+  if (Number.isInteger(savedGreetingIndex) && savedGreetingIndex >= 0 &&
+      savedGreetingIndex < dashboardGreetingMessages.length) {
+    dashboardGreetingIndex = savedGreetingIndex;
+  }
+  localStorage.setItem(
+    "flyers-greeting-cycle",
+    String((dashboardGreetingIndex + 1) % dashboardGreetingMessages.length)
+  );
+} catch (_error) {}
+
+function renderDashboardGreeting(username) {
+  const greeting = dashboardGreetingMessages[dashboardGreetingIndex] || dashboardGreetingMessages[0];
+  const element = $("#dashboard-greeting");
+  if (element) element.textContent = greeting.replace("{username}", username || "pilot");
+}
 let selectedPlanes = [];
 let knownPlanes = [];
 let selectedPhotoBase64 = "";
@@ -130,7 +156,6 @@ function showSignedOut() {
   $("#account-area").hidden = true;
   $("#group-tab").hidden = true;
   $("#admin-tab").hidden = true;
-  $("#challenge-banner").hidden = true;
   $("#auth-form").reset();
   setAuthMode("login");
 }
@@ -143,7 +168,7 @@ function showSignedIn(user) {
   $("#app-section").hidden = !hasGroup;
   $("#account-area").hidden = false;
   $("#account-name").textContent = user.username;
-  $("#welcome-name").textContent = user.username;
+  renderDashboardGreeting(user.username);
   $("#group-tab").hidden = !hasGroup;
   $("#admin-tab").hidden = !hasGroup || !user.isAdmin;
   renderTopbarAvatar(user.avatarBase64 || "", user.username);
@@ -324,30 +349,6 @@ async function loadMyLogs() {
 }
 
 
-async function loadChallengeBanner() {
-  try {
-    const result = await api("/api/challenge");
-    const challenge = result.challenge || { status: "not_started" };
-    const start = challenge.startDate ? formatDate(challenge.startDate) : "";
-    const end = challenge.endDate ? formatDate(challenge.endDate) : "";
-    let detail = "The optional 360-day challenge window has not started.";
-    if (challenge.status === "scheduled") {
-      detail = "Scheduled for " + start + " through " + end + ". Participation is optional.";
-    } else if (challenge.status === "active") {
-      detail = "Current window: " + start + " through " + end + ". Participation is optional.";
-    } else if (challenge.status === "ended") {
-      detail = challenge.endedAt
-        ? "The challenge window was ended on " + formatDate(challenge.endedAt) + "."
-        : (end ? "The challenge window ended on " + end + "." : "The challenge window has ended.");
-    }
-    $("#challenge-banner-title").textContent = "Optional 360-day challenge";
-    $("#challenge-banner-detail").textContent = detail;
-    $("#challenge-banner").hidden = false;
-  } catch (_error) {
-    $("#challenge-banner").hidden = true;
-  }
-}
-
 function renderAdminOverview(data) {
   const challenge = data.challenge || { status: "not_started" };
   const labels = {
@@ -450,7 +451,6 @@ async function loadAdminPanel() {
     const data = await api("/api/admin/overview");
     renderAdminOverview(data);
     showMessage($("#admin-message"), "", false);
-    await loadChallengeBanner();
   } catch (error) {
     const message = error && error.message ? error.message : "The administrator dashboard could not be loaded.";
     showMessage($("#admin-message"), message, false);
@@ -470,6 +470,7 @@ async function loadAdminPanel() {
 
 function renderGroupPanel(group) {
   currentGroup = group;
+  $("#dashboard-group-name").textContent = group.name;
   $("#group-heading").textContent = group.name;
   $("#group-subtitle").textContent = group.isOwner
     ? "You're the owner of this group. Invite friends and manage its settings."
@@ -1062,9 +1063,11 @@ async function checkSession() {
         showMessage($("#group-setup-message"), "Create a group or enter an invite code to join your friends.", false);
         return;
       }
-      await loadSettings();
-      await refreshMyStats();
-      await loadChallengeBanner();
+      await Promise.all([
+        loadSettings(),
+        refreshMyStats(),
+        loadGroupPanel()
+      ]);
       switchView("feed");
     } else {
       showSignedOut();
