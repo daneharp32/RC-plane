@@ -32,6 +32,7 @@ function renderDashboardGreeting(username) {
 let selectedPlanes = [];
 let flightHangarPlanes = [];
 let flightPlanesLoadToken = 0;
+let flightPlaneLoadTimer = null;
 let selectedPhotoBase64 = "";
 let selectedFunPhotoBase64 = "";
 let selectedHangarPhotoBase64 = "";
@@ -754,7 +755,13 @@ function switchView(view) {
   const isSettings = view === "settings";
   const isGroup = view === "group";
   const isAdminView = view === "admin";
-  if (!isLog) flightPlanesLoadToken += 1;
+  if (!isLog) {
+    flightPlanesLoadToken += 1;
+    if (flightPlaneLoadTimer) {
+      clearTimeout(flightPlaneLoadTimer);
+      flightPlaneLoadTimer = null;
+    }
+  }
   $("#feed-view").hidden = !isFeed;
   $("#my-logs-view").hidden = !isMine;
   $("#log-view").hidden = !isLog;
@@ -846,21 +853,59 @@ function renderFlightPlaneOptions() {
   }).join("");
 }
 
+function showFlightPlaneLoadError(message) {
+  const container = $("#flight-plane-options");
+  container.innerHTML =
+    '<div class="flight-plane-error-state">' +
+      '<strong>Could not load your Hangar</strong>' +
+      '<p>' + escapeHtml(message) + '</p>' +
+      '<div class="flight-plane-error-actions">' +
+        '<button type="button" class="button button-quiet button-small" data-retry-flight-hangar>Try again</button>' +
+        '<button type="button" class="button button-primary button-small" id="open-hangar-from-log">Open my Hangar</button>' +
+      '</div>' +
+    '</div>';
+}
+
 async function loadFlightPlaneOptions() {
-  if (!currentUser) return;
+  if (flightPlaneLoadTimer) {
+    clearTimeout(flightPlaneLoadTimer);
+    flightPlaneLoadTimer = null;
+  }
+  if (!currentUser || !currentUser.id) {
+    showFlightPlaneLoadError("Your account details aren't available. Please refresh Flyers and sign in again.");
+    return;
+  }
+
   const requestToken = ++flightPlanesLoadToken;
   const container = $("#flight-plane-options");
-  container.innerHTML = '<p class="muted">Loading aircraft from your Hangar…</p>';
+  container.innerHTML = '<p class="muted" data-flight-plane-loading>Loading aircraft from your Hangar…</p>';
   flightHangarPlanes = [];
+
+  // Always replace the loading screen with a useful recovery option if the request stalls.
+  flightPlaneLoadTimer = setTimeout(function () {
+    if (requestToken !== flightPlanesLoadToken || $("#log-view").hidden) return;
+    flightPlanesLoadToken += 1;
+    flightPlaneLoadTimer = null;
+    showFlightPlaneLoadError("The Hangar request is taking longer than expected. You can retry or open your Hangar directly.");
+  }, 10000);
+
   try {
     const result = await api("/api/hangar?userId=" + encodeURIComponent(currentUser.id));
     if (requestToken !== flightPlanesLoadToken || $("#log-view").hidden) return;
-    if (!result.isMine) throw new Error("Your Hangar could not be loaded. Please reopen the flight form.");
+    if (flightPlaneLoadTimer) {
+      clearTimeout(flightPlaneLoadTimer);
+      flightPlaneLoadTimer = null;
+    }
+    if (!result.isMine) throw new Error("The server didn't return your Hangar. Please try again.");
     flightHangarPlanes = Array.isArray(result.planes) ? result.planes : [];
     renderFlightPlaneOptions();
   } catch (error) {
     if (requestToken !== flightPlanesLoadToken || $("#log-view").hidden) return;
-    container.innerHTML = '<p class="flight-plane-error">' + escapeHtml(error.message) + '</p>';
+    if (flightPlaneLoadTimer) {
+      clearTimeout(flightPlaneLoadTimer);
+      flightPlaneLoadTimer = null;
+    }
+    showFlightPlaneLoadError(error.message || "Please try loading your Hangar again.");
   }
 }
 
@@ -1522,6 +1567,10 @@ $("#flight-plane-options").addEventListener("change", function (event) {
 });
 
 $("#flight-plane-options").addEventListener("click", function (event) {
+  if (event.target.closest("[data-retry-flight-hangar]")) {
+    loadFlightPlaneOptions();
+    return;
+  }
   if (!event.target.closest("#open-hangar-from-log")) return;
   activeHangarUserId = currentUser.id;
   activeHangarUsername = currentUser.username;
