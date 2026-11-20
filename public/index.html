@@ -134,10 +134,6 @@
             <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3.5 10 8.5-7 8.5 7v10a1 1 0 0 1-1 1h-5.5v-7h-4v7H4.5a1 1 0 0 1-1-1z"/></svg>
             <span>Feed</span>
           </button>
-          <button id="participants-tab" class="nav-tab" type="button">
-            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 20v-1.5A5.2 5.2 0 0 1 8 13.3h2a5.2 5.2 0 0 1 5.2 5.2V20zM15.5 5.3a3.1 3.1 0 0 1 0 5.9M17 13.7a4.6 4.6 0 0 1 4.2 4.6V20h-4"/></svg>
-            <span>People</span>
-          </button>
           <button id="group-tab" class="nav-tab" type="button">
             <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V21H3z"/><path d="M8 21v-6h8v6M12 3v5"/></svg>
             <span>Group</span>
@@ -297,22 +293,6 @@
         </section>
 
 
-        <section id="participants-view" class="view-section" hidden>
-          <div class="feed-intro">
-            <div>
-              <p class="eyebrow">THE GROUP</p>
-              <h2>Participants</h2>
-              <p class="muted">Meet everyone in the group, see their logged challenge weeks, and browse the aircraft in their Hangars.</p>
-            </div>
-            <span id="participants-count" class="admin-count">0</span>
-          </div>
-          <p class="participants-note">Once the 360-day challenge starts, a week counts when at least one completed session is logged during that seven-day block. This is just a record of posts, not a participation requirement; before the challenge starts, everyone shows 0.</p>
-          <div id="participants-list" class="participants-grid">
-            <p class="muted">Loading participants…</p>
-          </div>
-          <p id="participants-message" class="form-message" role="status" aria-live="polite"></p>
-        </section>
-
         <section id="hangar-view" class="view-section hangar-view" hidden>
           <div class="feed-intro">
             <div>
@@ -320,7 +300,7 @@
               <h2 id="hangar-title">Hangar</h2>
               <p id="hangar-subtitle" class="muted">Your personal list of RC aircraft.</p>
             </div>
-            <button id="hangar-back-button" class="button button-quiet button-small" type="button" hidden>← Participants</button>
+            <button id="hangar-back-button" class="button button-quiet button-small" type="button" hidden>← Group</button>
           </div>
           <section id="hangar-add-panel" class="panel hangar-add-panel">
             <h3>Add an aircraft</h3>
