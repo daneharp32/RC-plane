@@ -591,7 +591,8 @@ function renderHangar(data) {
   $("#hangar-subtitle").textContent = activeHangarIsMine
     ? "Your aircraft collection. Add the RC planes you own."
     : "Aircraft listed by " + data.owner.username + ".";
-  $("#hangar-add-panel").hidden = !activeHangarIsMine;
+  $("#hangar-add-panel").hidden = true;
+  $("#hangar-add-button").hidden = !activeHangarIsMine;
   $("#hangar-back-button").hidden = activeHangarIsMine;
   const planes = Array.isArray(data.planes) ? data.planes : [];
   if (!planes.length) {
@@ -1371,6 +1372,15 @@ $("#hangar-tab").addEventListener("click", function () {
 });
 $("#settings-tab").addEventListener("click", function () { switchView("settings"); });
 $("#hangar-back-button").addEventListener("click", function () { switchView("group"); });
+$("#hangar-add-button").addEventListener("click", function () {
+  $("#hangar-add-button").hidden = true;
+  $("#hangar-add-panel").hidden = false;
+  $("#hangar-plane-name").focus();
+});
+$("#hangar-cancel-add-button").addEventListener("click", function () {
+  $("#hangar-add-panel").hidden = true;
+  $("#hangar-add-button").hidden = !activeHangarIsMine;
+});
 
 $("#hangar-photo").addEventListener("change", function () {
   handleHangarPhotoSelection(this.files && this.files[0]);
