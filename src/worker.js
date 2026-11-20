@@ -345,10 +345,10 @@ async function handleDashboard(env, user) {
   const results = await Promise.all([
     env.DB.prepare(
       "SELECT COUNT(*) AS total, COUNT(DISTINCT flight_date) AS flying_days " +
-      "FROM flight_posts WHERE user_id = ? AND group_id = ?"
+      "FROM flight_posts WHERE user_id = ? AND group_id = ? AND post_type = 'flight'"
     ).bind(user.id, user.groupId).first(),
     env.DB.prepare(
-      "SELECT planes_json FROM flight_posts WHERE user_id = ? AND group_id = ? ORDER BY created_at DESC LIMIT 500"
+      "SELECT planes_json FROM flight_posts WHERE user_id = ? AND group_id = ? AND post_type = 'flight' ORDER BY created_at DESC LIMIT 500"
     ).bind(user.id, user.groupId).all()
   ]);
 
@@ -439,6 +439,7 @@ async function ensureFlightPostsSchema(db) {
     "description TEXT NOT NULL DEFAULT '', " +
     "photo_mime TEXT NOT NULL DEFAULT 'image/jpeg' CHECK (photo_mime = 'image/jpeg'), " +
     "photo_base64 TEXT NOT NULL CHECK (length(photo_base64) <= 440000), " +
+    "post_type TEXT NOT NULL DEFAULT 'flight' CHECK (post_type IN ('flight','fun')), " +
     "created_at TEXT NOT NULL)"
   ).run();
   await db.prepare(
@@ -537,8 +538,14 @@ async function ensureGroupSchema(db) {
   if (!names.has("group_id")) {
     await db.prepare("ALTER TABLE flight_posts ADD COLUMN group_id TEXT REFERENCES groups(id)").run();
   }
+  if (!names.has("post_type")) {
+    await db.prepare("ALTER TABLE flight_posts ADD COLUMN post_type TEXT NOT NULL DEFAULT 'flight' CHECK (post_type IN ('flight','fun'))").run();
+  }
   await db.prepare(
     "CREATE INDEX IF NOT EXISTS idx_flight_posts_group_created ON flight_posts(group_id, created_at DESC, id DESC)"
+  ).run();
+  await db.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_flight_posts_group_type_created ON flight_posts(group_id, post_type, created_at DESC, id DESC)"
   ).run();
   await db.prepare(
     "CREATE INDEX IF NOT EXISTS idx_group_members_group_role ON group_members(group_id, role)"
@@ -852,7 +859,7 @@ async function handleParticipants(env, user) {
   const result = await env.DB.prepare(
     "SELECT u.id, u.username, up.avatar_base64, " +
     "(SELECT COUNT(DISTINCT CAST((julianday(p.flight_date) - julianday(cs.start_date)) / 7 AS INTEGER)) " +
-    "FROM flight_posts p WHERE p.user_id = u.id AND p.group_id = ? AND cs.start_date IS NOT NULL " +
+    "FROM flight_posts p WHERE p.user_id = u.id AND p.group_id = ? AND p.post_type = 'flight' AND cs.start_date IS NOT NULL " +
     "AND p.flight_date >= cs.start_date AND p.flight_date <= " +
     "CASE WHEN cs.status = 'ended' AND cs.ended_at IS NOT NULL THEN cs.ended_at ELSE cs.end_date END) AS weeks_completed " +
     "FROM group_members gm JOIN users u ON u.id = gm.user_id " +
@@ -977,7 +984,7 @@ async function handleAdminOverview(env, admin) {
   const [challenge, posts, users] = await Promise.all([
     readChallengeState(env.DB, admin.groupId),
     env.DB.prepare(
-      "SELECT p.id, p.flight_date, p.spot, p.other_spot AS otherSpot, p.description, p.created_at, u.username " +
+      "SELECT p.id, p.flight_date, p.spot, p.other_spot AS otherSpot, p.description, p.post_type AS postType, p.created_at, u.username " +
       "FROM flight_posts p JOIN users u ON u.id = p.user_id WHERE p.group_id = ? " +
       "ORDER BY p.created_at DESC, p.id DESC"
     ).bind(admin.groupId).all(),
@@ -1063,13 +1070,42 @@ function publicPost(row) {
     planes: planes,
     description: row.description,
     photoMime: row.photo_mime,
-    photoBase64: row.photo_base64,
+    photoBase64: row.photo_base64 || "",
+    postType: row.post_type || "flight",
     createdAt: row.created_at
   };
 }
 
+async function handleCreateFunPost(body, env, user) {
+  const description = typeof body.description === "string" ? body.description.trim() : "";
+  const photoBase64 = typeof body.photoBase64 === "string" ? body.photoBase64 : "";
+  const photoMime = typeof body.photoMime === "string" ? body.photoMime : "";
+
+  if (description.length > 1000) return errorResponse("Text must be 1,000 characters or fewer.");
+  if (!description && !photoBase64) return errorResponse("Add some text, a photo, or both before posting.");
+  if (photoBase64 && (photoMime !== "image/jpeg" ||
+      photoBase64.length < 100 || photoBase64.length > 440000 ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(photoBase64))) {
+    return errorResponse("Please choose a valid, smaller photo (maximum 320 KB after compression).");
+  }
+  if (!photoBase64 && photoMime && photoMime !== "image/jpeg") {
+    return errorResponse("Please use a JPEG photo.");
+  }
+
+  const id = randomId();
+  const createdAt = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO flight_posts " +
+    "(id, user_id, group_id, flight_date, spot, other_spot, planes_json, description, photo_mime, photo_base64, post_type, created_at) " +
+    "VALUES (?, ?, ?, ?, 'other', '', '[]', ?, 'image/jpeg', ?, 'fun', ?)"
+  ).bind(id, user.id, user.groupId, localToday(), description, photoBase64, createdAt).run();
+
+  return json({ ok: true, id: id, postType: "fun", createdAt: createdAt }, 201);
+}
+
 async function handleCreatePost(request, env, user) {
   const body = await readJson(request, 560000);
+  if (body.postType === "fun") return handleCreateFunPost(body, env, user);
   const flightDate = typeof body.flightDate === "string" ? body.flightDate : "";
   const spot = typeof body.spot === "string" ? body.spot : "";
   const otherSpot = typeof body.otherSpot === "string" ? body.otherSpot.trim() : "";
@@ -1142,14 +1178,14 @@ async function handleFeed(request, env, user) {
 
   let sql =
     "SELECT p.id, p.flight_date, p.spot, p.other_spot, p.planes_json, " +
-    "p.description, p.photo_mime, p.photo_base64, p.created_at, u.username, " +
+    "p.description, p.photo_mime, p.photo_base64, p.post_type, p.created_at, u.username, " +
     "COALESCE(up.avatar_base64, '') AS avatar_base64 " +
     "FROM flight_posts p JOIN users u ON u.id = p.user_id " +
     "LEFT JOIN user_profiles up ON up.user_id = u.id WHERE 1 = 1";
   const bindings = [user.groupId];
   sql += " AND p.group_id = ?";
   if (mineOnly) {
-    sql += " AND p.user_id = ?";
+    sql += " AND p.user_id = ? AND p.post_type = 'flight'";
     bindings.push(user.id);
   }
   if (isNewerQuery) {
