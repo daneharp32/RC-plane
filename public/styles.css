@@ -843,3 +843,41 @@ html[data-theme="dark"] .group-owner-transfer-note { color: #a0afba; }
   .hangar-add-heading .button { min-height: 34px; }
   .hangar-add-action .button { width: 100%; }
 }
+
+
+/* Aircraft selector used by the flight-log form. */
+.flight-plane-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:12px 0 9px; }
+.flight-plane-option {
+  display:grid; min-width:0; grid-template-columns:20px 54px minmax(0,1fr);
+  align-items:center; gap:11px; padding:11px; border:1px solid var(--line);
+  border-radius:12px; background:var(--panel); cursor:pointer;
+  transition:border-color .15s ease,background .15s ease,box-shadow .15s ease;
+}
+.flight-plane-option:hover { border-color:#91b8cf; background:#f7fbfd; }
+.flight-plane-option.selected { border-color:#5d9fc6; background:#edf6fb; box-shadow:0 0 0 2px rgba(36,115,166,.08); }
+.flight-plane-option input { width:18px; height:18px; margin:0; accent-color:var(--blue); }
+.flight-plane-thumb { display:grid; width:54px; height:48px; place-items:center; overflow:hidden; border-radius:8px; background:#edf3f6; object-fit:cover; }
+.flight-plane-thumb-empty { color:#6a91a8; font-size:23px; }
+.flight-plane-option-copy { display:flex; min-width:0; flex-direction:column; gap:4px; }
+.flight-plane-option-copy strong { overflow-wrap:anywhere; color:var(--navy); font-size:12px; }
+.flight-plane-option-copy small { display:-webkit-box; overflow:hidden; color:var(--muted); font-size:10px; line-height:1.35; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+.selected-plane-summary { min-height:18px; margin:8px 0 0; color:var(--muted); font-size:10px; line-height:1.5; }
+.selected-plane-summary.has-selection { color:var(--blue); font-weight:750; }
+.flight-plane-empty { grid-column:1 / -1; padding:18px; border:1px dashed #b9cbd6; border-radius:12px; background:#f7fafb; text-align:center; }
+.flight-plane-empty strong { color:var(--navy); font-size:13px; }
+.flight-plane-empty p { max-width:420px; margin:6px auto 12px; color:var(--muted); font-size:11px; line-height:1.5; }
+.flight-plane-error { grid-column:1 / -1; margin:0; color:#a64f49; font-size:11px; }
+html[data-theme="dark"] .flight-plane-option { border-color:#344653; background:#1b2a35; }
+html[data-theme="dark"] .flight-plane-option:hover { border-color:#56788d; background:#203541; }
+html[data-theme="dark"] .flight-plane-option.selected { border-color:#659fc1; background:#213d4d; }
+html[data-theme="dark"] .flight-plane-option-copy strong, html[data-theme="dark"] .flight-plane-empty strong { color:#e4edf3; }
+html[data-theme="dark"] .flight-plane-thumb { background:#142630; }
+html[data-theme="dark"] .flight-plane-thumb-empty { color:#9bc8e1; }
+html[data-theme="dark"] .flight-plane-empty { border-color:#405562; background:#172630; }
+html[data-theme="dark"] .selected-plane-summary.has-selection { color:#94c9e8; }
+html[data-theme="dark"] .flight-plane-error { color:#e59b94; }
+@media (max-width:620px) {
+  .flight-plane-options { grid-template-columns:1fr; gap:8px; }
+  .flight-plane-option { grid-template-columns:20px 50px minmax(0,1fr); padding:10px; }
+  .flight-plane-thumb { width:50px; height:44px; }
+}
