@@ -434,7 +434,7 @@ async function loadAdminPanel() {
 
     currentUser = session.user;
     $("#account-name").textContent = currentUser.username;
-    $("#welcome-name").textContent = currentUser.username;
+    renderDashboardGreeting(currentUser.username);
     $("#admin-tab").hidden = !currentUser.isAdmin;
 
     if (!currentUser.isAdmin) {
