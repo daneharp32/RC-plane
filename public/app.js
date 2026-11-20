@@ -122,7 +122,7 @@ function showSignedOut() {
   activeHangarUsername = "";
   activeHangarIsMine = true;
   selectedHangarPhotoBase64 = "";
-  selectedFunPhotoBase64 = "";
+  clearFunPhoto();
   selectedAvatarBase64 = "";
   $("#auth-section").hidden = false;
   $("#group-setup-section").hidden = true;
