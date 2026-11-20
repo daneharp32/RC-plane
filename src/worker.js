@@ -561,16 +561,17 @@ async function ensureGroupSchema(db) {
         return String(row.username || "").toLowerCase().includes("dane");
       });
       const owner = exactDane || namedDane || accounts[0];
-      const groupId = randomId();
+      // A stable migration key makes concurrent first requests converge on one legacy group.
+      const groupId = "legacy-flyers-v1";
       const now = new Date().toISOString();
       const statements = [
         db.prepare(
-          "INSERT INTO groups (id, name, invite_code, owner_user_id, max_members, created_at) VALUES (?, 'Flyers', ?, ?, ?, ?)"
+          "INSERT INTO groups (id, name, invite_code, owner_user_id, max_members, created_at) VALUES (?, 'Flyers', ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING"
         ).bind(groupId, randomInviteCode(), owner.id, Math.max(25, accounts.length), now)
       ];
       for (const account of accounts) {
         statements.push(db.prepare(
-          "INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)"
+          "INSERT OR IGNORE INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)"
         ).bind(groupId, account.id, account.id === owner.id ? "owner" : "member", now));
       }
       statements.push(db.prepare("UPDATE flight_posts SET group_id = ? WHERE group_id IS NULL").bind(groupId));
@@ -583,7 +584,7 @@ async function ensureGroupSchema(db) {
         "INSERT OR IGNORE INTO group_challenge_settings (group_id, status, updated_at) VALUES (?, 'not_started', ?)"
       ).bind(groupId, now));
       statements.push(db.prepare(
-        "INSERT INTO app_migrations (name, applied_at) VALUES ('bootstrap_existing_accounts_into_flyers_v1', ?)"
+        "INSERT OR IGNORE INTO app_migrations (name, applied_at) VALUES ('bootstrap_existing_accounts_into_flyers_v1', ?)"
       ).bind(now));
       await db.batch(statements);
     } else {
