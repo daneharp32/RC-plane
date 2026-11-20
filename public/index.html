@@ -338,9 +338,17 @@
             </div>
             <button id="hangar-back-button" class="button button-quiet button-small" type="button" hidden>← Group</button>
           </div>
-          <section id="hangar-add-panel" class="panel hangar-add-panel">
-            <h3>Add an aircraft</h3>
-            <p class="muted">List a plane you own. A photo is optional.</p>
+          <div class="hangar-add-action">
+            <button id="hangar-add-button" class="button button-primary" type="button" hidden>＋ Add aircraft</button>
+          </div>
+          <section id="hangar-add-panel" class="panel hangar-add-panel" hidden>
+            <div class="hangar-add-heading">
+              <div>
+                <h3>Add an aircraft</h3>
+                <p class="muted">List a plane you own. A photo is optional.</p>
+              </div>
+              <button id="hangar-cancel-add-button" class="button button-quiet button-small" type="button">Cancel</button>
+            </div>
             <form id="hangar-form">
               <label class="field">
                 <span>Aircraft name</span>
