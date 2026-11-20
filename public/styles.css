@@ -265,21 +265,6 @@ main { min-height: calc(100vh - 140px); padding: 40px 0 64px; }
 .nav-tab { flex: 0 0 auto; white-space: nowrap; }
 .topbar-avatar { display: grid; flex: 0 0 auto; width: 34px; height: 34px; overflow: hidden; place-items: center; border: 1px solid #dce5eb; border-radius: 50%; background: #e8f2f7; color: #326d91; font-size: 13px; font-weight: 850; }
 .topbar-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.participants-note { margin: 0 0 16px; padding: 11px 14px; border-left: 3px solid #9bb8c9; border-radius: 0 8px 8px 0; background: #f0f6f9; color: #607988; font-size: 11px; line-height: 1.6; }
-.participants-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-.participant-card { display: flex; min-width: 0; flex-direction: column; gap: 14px; padding: 17px; border: 1px solid var(--line); border-radius: 13px; background: #fff; box-shadow: 0 4px 14px rgba(17, 37, 52, .025); }
-.participant-top { display: flex; min-width: 0; align-items: center; gap: 11px; }
-.participant-avatar { display: grid; flex: 0 0 auto; width: 43px; height: 43px; overflow: hidden; place-items: center; border: 1px solid #e1e9ee; border-radius: 50%; background: #edf4f8; color: #386f90; font-size: 15px; font-weight: 850; object-fit: cover; }
-.participant-name { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
-.participant-name strong { overflow: hidden; color: #2a3c49; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.participant-name small { color: #8b99a2; font-size: 10px; }
-.participant-week-stat { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px; border-radius: 9px; background: #f2f7fa; }
-.participant-week-stat strong { color: var(--navy); font-size: 25px; font-weight: 850; letter-spacing: -.05em; }
-.participant-week-stat span { color: #72818a; font-size: 10px; line-height: 1.4; }
-.participant-aircraft { min-width: 0; }
-.participant-aircraft .post-plane-label { margin-bottom: 7px; }
-.participant-no-planes { color: #9aa5ac; font-size: 10px; }
-.participant-hangar-button { width: 100%; margin-top: auto; }
 .hangar-view { max-width: 980px; margin: 0 auto; }
 .hangar-add-panel { margin-bottom: 17px; padding: 20px; }
 .hangar-add-panel h3 { margin: 0; color: var(--navy); font-size: 17px; }
@@ -311,11 +296,8 @@ main { min-height: calc(100vh - 140px); padding: 40px 0 64px; }
 .settings-username-field { max-width: 420px; }
 
 @media (max-width: 950px) {
-  .participants-grid, .hangar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 720px) {
-  .participants-grid, .hangar-grid { grid-template-columns: 1fr; }
-  .participant-card { padding: 15px; }
   .hangar-photo-wrap, .hangar-photo-placeholder { height: 210px; }
   .settings-panel { padding: 18px; }
   .settings-avatar { width: 76px; height: 76px; }
@@ -389,8 +371,6 @@ html[data-theme="dark"] .field small,
 html[data-theme="dark"] .photo-drop small,
 html[data-theme="dark"] .photo-preview-caption,
 html[data-theme="dark"] .feed-end,
-html[data-theme="dark"] .participant-no-planes,
-html[data-theme="dark"] .participants-note { color: #9cacb7; }
 html[data-theme="dark"] .account-name { color: #d5e0e7; }
 html[data-theme="dark"] .theme-toggle {
   border-color: #475b69;
@@ -405,7 +385,6 @@ html[data-theme="dark"] .panel,
 html[data-theme="dark"] .auth-panel,
 html[data-theme="dark"] .stat-card,
 html[data-theme="dark"] .post-card,
-html[data-theme="dark"] .participant-card,
 html[data-theme="dark"] .hangar-card,
 html[data-theme="dark"] .settings-panel,
 html[data-theme="dark"] .admin-panel { background: #1b2a35; border-color: #344653; box-shadow: 0 8px 28px rgba(0,0,0,.12); }
@@ -417,7 +396,6 @@ html[data-theme="dark"] .plane-fieldset legend,
 html[data-theme="dark"] .admin-panel h3,
 html[data-theme="dark"] .hangar-card h3,
 html[data-theme="dark"] .settings-avatar-row strong,
-html[data-theme="dark"] .participant-name strong,
 html[data-theme="dark"] .post-author-copy strong { color: #e4edf3; }
 html[data-theme="dark"] .field input,
 html[data-theme="dark"] .field textarea,
@@ -442,7 +420,6 @@ html[data-theme="dark"] .post-chip { background: #253d4b; color: #bad9eb; }
 html[data-theme="dark"] .post-chip.spot { background: #243d35; color: #a8d5bb; }
 html[data-theme="dark"] .post-plane { border-color: #405461; color: #d5e2e9; background: #223440; }
 html[data-theme="dark"] .avatar,
-html[data-theme="dark"] .participant-avatar,
 html[data-theme="dark"] .topbar-avatar,
 html[data-theme="dark"] .settings-avatar { background: #294556; color: #bfe1f5; }
 html[data-theme="dark"] .photo-drop,
@@ -473,7 +450,6 @@ html[data-theme="dark"] .safety-note { border-left-color: #5c987b; background: #
 html[data-theme="dark"] .footer { border-top-color: #30414d; color: #8497a3; }
 html[data-theme="dark"] .post-description,
 html[data-theme="dark"] .hangar-plane-description { color: #b7c5ce; }
-html[data-theme="dark"] .participants-note { border-color: #364b58; background: #1b2b36; }
 html[data-theme="dark"] .settings-avatar-row { border-bottom-color: #344653; }
 html[data-theme="dark"] .text-button { color: #e59b94; }
 html[data-theme="dark"] .form-message.success { color: #81cba1; }
