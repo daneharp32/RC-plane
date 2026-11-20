@@ -121,10 +121,10 @@
 
       <section id="app-section" class="app-section" hidden>
         <div class="page-heading">
-          <div>
+          <div class="dashboard-heading-copy">
             <p class="eyebrow">THE GROUP FLIGHT JOURNAL</p>
-            <h1>Hey, <span id="welcome-name">pilot</span>.</h1>
-            <p class="muted">See what everyone has been flying lately.</p>
+            <h1 id="dashboard-group-name">Your group</h1>
+            <p id="dashboard-greeting" class="dashboard-greeting" aria-live="polite"></p>
           </div>
           <div class="page-heading-actions">
             <button id="log-flight-button" class="button button-primary log-flight-top" type="button">＋ Log flight</button>
@@ -158,11 +158,6 @@
             <span>Admin</span>
           </button>
         </nav>
-
-        <aside id="challenge-banner" class="challenge-banner" hidden>
-          <strong id="challenge-banner-title">Optional 360-day challenge</strong>
-          <span id="challenge-banner-detail"></span>
-        </aside>
 
         <section id="feed-view" class="view-section">
           <div class="feed-intro">
