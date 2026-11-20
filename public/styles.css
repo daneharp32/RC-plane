@@ -822,3 +822,24 @@ html[data-theme="dark"] .group-owner-transfer-note { color: #a0afba; }
     flex: 1 1 125px;
   }
 }
+
+/* Hangar add form opens only after the Add aircraft action is pressed. */
+.hangar-add-action {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 13px;
+}
+.hangar-add-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.hangar-add-heading .muted { margin: 6px 0 0; }
+.hangar-add-heading .button { flex: 0 0 auto; }
+@media (max-width: 520px) {
+  .hangar-add-heading { gap: 10px; }
+  .hangar-add-heading .button { min-height: 34px; }
+  .hangar-add-action .button { width: 100%; }
+}
