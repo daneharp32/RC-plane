@@ -6,6 +6,7 @@ let currentGroup = null;
 let selectedPlanes = [];
 let knownPlanes = [];
 let selectedPhotoBase64 = "";
+let selectedFunPhotoBase64 = "";
 let selectedHangarPhotoBase64 = "";
 let selectedAvatarBase64 = "";
 let activeHangarUserId = null;
@@ -121,6 +122,7 @@ function showSignedOut() {
   activeHangarUsername = "";
   activeHangarIsMine = true;
   selectedHangarPhotoBase64 = "";
+  selectedFunPhotoBase64 = "";
   selectedAvatarBase64 = "";
   $("#auth-section").hidden = false;
   $("#group-setup-section").hidden = true;
@@ -163,6 +165,16 @@ function formatTimestamp(value) {
   }).format(date);
 }
 
+function avatarMarkup(base64, username, className) {
+  const initial = username ? username.slice(0, 1).toUpperCase() : "?";
+  if (base64) {
+    return '<img class="' + className + '" src="data:image/jpeg;base64,' +
+      escapeHtml(base64) + '" alt="' + escapeHtml(username || "Group member") + ' profile picture">';
+  }
+  return '<span class="' + className + ' avatar-fallback" aria-hidden="true">' +
+    escapeHtml(initial) + '</span>';
+}
+
 function spotLabel(post) {
   const labels = {
     chill_guy: "Chill Guy",
@@ -174,7 +186,33 @@ function spotLabel(post) {
   return labels[post.spot] || "Flying spot";
 }
 
+function renderFunPost(post) {
+  const photo = post.photoBase64
+    ? '<div class="post-photo-wrap fun-post-photo-wrap"><img class="post-photo" src="data:image/jpeg;base64,' +
+      escapeHtml(post.photoBase64) + '" alt="Photo shared by ' + escapeHtml(post.username) + '" loading="lazy"></div>'
+    : "";
+  const text = post.description
+    ? '<p class="fun-post-text">' + escapeHtml(post.description) + '</p>'
+    : "";
+  return '<article class="post-card fun-post-card" data-post-id="' + escapeHtml(post.id) + '">' +
+    '<div class="fun-post-banner"><strong>✦ COMMUNITY POST</strong>' +
+      '<span>JUST FOR FUN · NOT PART OF THE FLIGHT CHALLENGE</span></div>' +
+    '<header class="post-header fun-post-header">' +
+      '<div class="post-author">' +
+        avatarMarkup(post.avatarBase64 || "", post.username, "avatar") +
+        '<div class="post-author-copy"><strong>' + escapeHtml(post.username) + '</strong>' +
+        '<small>Shared with the group</small></div>' +
+      '</div>' +
+      '<time class="post-time" datetime="' + escapeHtml(post.createdAt) + '">' +
+        escapeHtml(formatTimestamp(post.createdAt)) + '</time>' +
+    '</header>' +
+    photo +
+    '<div class="fun-post-body">' + text + '</div>' +
+  '</article>';
+}
+
 function renderPost(post) {
+  if (post.postType === "fun") return renderFunPost(post);
   const photoSrc = "data:image/jpeg;base64," + post.photoBase64;
   const planes = Array.isArray(post.planes) ? post.planes : [];
   const initial = post.username ? post.username.slice(0, 1).toUpperCase() : "?";
@@ -194,7 +232,7 @@ function renderPost(post) {
     '<div class="post-photo-wrap"><img class="post-photo" src="' + photoSrc +
       '" alt="RC plane at ' + escapeHtml(spotLabel(post)) + '" loading="lazy"></div>' +
     '<div class="post-body">' +
-      '<div class="post-meta"><span class="post-chip spot">⌖ ' + escapeHtml(spotLabel(post)) +
+      '<div class="post-meta"><span class="post-chip flight-kind">✈ FLIGHT LOG</span><span class="post-chip spot">⌖ ' + escapeHtml(spotLabel(post)) +
       '</span><span class="post-chip">✈ ' + planes.length + (planes.length === 1 ? " plane" : " planes") + "</span></div>" +
       '<p class="post-plane-label">Aircraft flown</p><div class="post-planes">' +
         planes.map(function (plane) { return '<span class="post-plane">' + escapeHtml(plane) + "</span>"; }).join("") +
@@ -206,7 +244,7 @@ function renderPost(post) {
 function renderFeed() {
   const list = $("#feed-list");
   if (!feedState.posts.length) {
-    list.innerHTML = '<div class="feed-empty"><strong>No flight posts yet</strong>Be the first to share a photo from a completed flying session.</div>';
+    list.innerHTML = '<div class="feed-empty"><strong>No posts yet</strong>Share a completed flight log or add a fun post for your group.</div>';
   } else {
     list.innerHTML = feedState.posts.map(renderPost).join("");
   }
@@ -347,11 +385,13 @@ function renderAdminOverview(data) {
   $("#admin-post-count").textContent = String(posts.length);
   $("#admin-posts-list").innerHTML = posts.length
     ? posts.map(function (post) {
-        const spot = spotLabel(post);
+        const isFunPost = post.postType === "fun";
+        const typeLabel = isFunPost ? "Fun post" : "Flight log · " + spotLabel(post);
+        const dateLabel = isFunPost ? "Community post" : formatDate(post.flight_date);
         const description = post.description ? " · " + escapeHtml(post.description.slice(0, 90)) : "";
         return '<div class="admin-list-row">' +
           '<div class="admin-list-copy"><strong>' + escapeHtml(post.username) + ' · ' +
-          escapeHtml(spot) + '</strong><small>' + escapeHtml(formatDate(post.flight_date)) +
+          escapeHtml(typeLabel) + '</strong><small>' + escapeHtml(dateLabel) +
           ' · ' + escapeHtml(formatTimestamp(post.created_at)) + description + '</small></div>' +
           '<div class="admin-list-actions"><button class="button button-quiet danger-button" type="button" data-admin-delete-post="' +
           escapeHtml(post.id) + '">Delete</button></div></div>';
@@ -711,6 +751,7 @@ function switchView(view) {
   const isFeed = view === "feed";
   const isMine = view === "mine";
   const isLog = view === "log";
+  const isFunPost = view === "fun-post";
   const isHangar = view === "hangar";
   const isSettings = view === "settings";
   const isGroup = view === "group";
@@ -718,6 +759,7 @@ function switchView(view) {
   $("#feed-view").hidden = !isFeed;
   $("#my-logs-view").hidden = !isMine;
   $("#log-view").hidden = !isLog;
+  $("#fun-post-view").hidden = !isFunPost;
   $("#hangar-view").hidden = !isHangar;
   $("#settings-view").hidden = !isSettings;
   $("#group-view").hidden = !isGroup;
@@ -757,6 +799,10 @@ function switchView(view) {
     $("#post-flight-date").value = localDate();
     showMessage($("#post-message"), "", false);
     showMessage($("#photo-message"), "", false);
+  }
+  if (isFunPost) {
+    showMessage($("#fun-post-message"), "", false);
+    showMessage($("#fun-post-photo-message"), "", false);
   }
 }
 
@@ -802,6 +848,33 @@ function clearPhoto() {
   $("#photo-drop").hidden = false;
   $("#photo-preview").removeAttribute("src");
   $("#photo-file-name").textContent = "";
+}
+
+function clearFunPhoto() {
+  selectedFunPhotoBase64 = "";
+  $("#fun-post-photo").value = "";
+  $("#fun-post-photo-preview-wrap").hidden = true;
+  $("#fun-post-photo-drop").hidden = false;
+  $("#fun-post-photo-preview").removeAttribute("src");
+  $("#fun-post-photo-file-name").textContent = "";
+}
+
+async function handleFunPhotoSelection(file) {
+  if (!file) return;
+  showMessage($("#fun-post-photo-message"), "Preparing photo…", false);
+  try {
+    const result = await compressPhoto(file, 315000);
+    selectedFunPhotoBase64 = result.base64;
+    $("#fun-post-photo-preview").src = result.preview;
+    $("#fun-post-photo-file-name").textContent =
+      (file.name || "Camera-roll photo") + " · " + Math.round(result.sizeBytes / 1024) + " KB";
+    $("#fun-post-photo-preview-wrap").hidden = false;
+    $("#fun-post-photo-drop").hidden = true;
+    showMessage($("#fun-post-photo-message"), "Photo ready to upload.", true);
+  } catch (error) {
+    clearFunPhoto();
+    showMessage($("#fun-post-photo-message"), error.message, false);
+  }
 }
 
 async function decodeSelectedImage(file) {
@@ -1468,6 +1541,49 @@ $("#post-form").addEventListener("submit", async function (event) {
     toast("Your flight log has been posted.");
   } catch (error) {
     showMessage($("#post-message"), error.message, false);
+  } finally {
+    setBusy(button, false);
+  }
+});
+
+$("#create-fun-post-button").addEventListener("click", function () { switchView("fun-post"); });
+$("#back-to-feed-fun-button").addEventListener("click", function () { switchView("feed"); });
+$("#fun-post-photo").addEventListener("change", function () {
+  handleFunPhotoSelection(this.files && this.files[0]);
+});
+$("#fun-post-photo-remove-button").addEventListener("click", function () {
+  clearFunPhoto();
+  showMessage($("#fun-post-photo-message"), "Photo removed.", false);
+});
+$("#fun-post-form").addEventListener("submit", async function (event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = $("#publish-fun-post-button");
+  const description = $("#fun-post-text").value.trim();
+  showMessage($("#fun-post-message"), "", false);
+  if (!description && !selectedFunPhotoBase64) {
+    showMessage($("#fun-post-message"), "Add some text, a photo, or both before posting.", false);
+    return;
+  }
+
+  setBusy(button, true, "Posting…");
+  try {
+    await api("/api/posts", {
+      method: "POST",
+      body: {
+        postType: "fun",
+        description: description,
+        photoMime: selectedFunPhotoBase64 ? "image/jpeg" : "",
+        photoBase64: selectedFunPhotoBase64
+      }
+    });
+    form.reset();
+    clearFunPhoto();
+    feedState = { posts: [], hasMore: false, nextCursor: null, loading: false };
+    switchView("feed");
+    toast("Your fun post has been shared.");
+  } catch (error) {
+    showMessage($("#fun-post-message"), error.message, false);
   } finally {
     setBusy(button, false);
   }
