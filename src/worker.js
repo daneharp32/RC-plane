@@ -611,8 +611,9 @@ async function groupSummary(db, groupId, viewer) {
       "FROM groups g WHERE g.id = ?"
     ).bind(groupId).first(),
     db.prepare(
-      "SELECT u.id, u.username, gm.role, gm.joined_at FROM group_members gm " +
-      "JOIN users u ON u.id = gm.user_id WHERE gm.group_id = ? " +
+      "SELECT u.id, u.username, gm.role, gm.joined_at, COALESCE(up.avatar_base64, '') AS avatar_base64 " +
+      "FROM group_members gm JOIN users u ON u.id = gm.user_id " +
+      "LEFT JOIN user_profiles up ON up.user_id = u.id WHERE gm.group_id = ? " +
       "ORDER BY CASE gm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, u.username COLLATE NOCASE"
     ).bind(groupId).all(),
     db.prepare(
@@ -632,7 +633,7 @@ async function groupSummary(db, groupId, viewer) {
     isOwner: viewer.groupRole === "owner",
     canManage: viewer.groupRole === "owner" || viewer.groupRole === "admin",
     members: (members.results || []).map(function (row) {
-      return { id: row.id, username: row.username, role: row.role, joinedAt: row.joined_at };
+      return { id: row.id, username: row.username, avatarBase64: row.avatar_base64 || "", role: row.role, joinedAt: row.joined_at };
     }),
     bannedUsers: viewer.groupRole === "owner" ? (bans.results || []).map(function (row) {
       return { id: row.id, username: row.username, bannedAt: row.banned_at };
