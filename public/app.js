@@ -403,7 +403,7 @@ async function loadAdminPanel() {
       switchView("feed");
       showMessage(
         $("#feed-message"),
-        'Your account does not have administrator access in this group.',
+        "Your account does not have administrator access in this group.",
         false
       );
       return;
