@@ -8,7 +8,6 @@ let knownPlanes = [];
 let selectedPhotoBase64 = "";
 let selectedHangarPhotoBase64 = "";
 let selectedAvatarBase64 = "";
-let participantsCache = [];
 let activeHangarUserId = null;
 let activeHangarUsername = "";
 let activeHangarIsMine = true;
@@ -118,7 +117,6 @@ function showSignedOut() {
   stopFeedPolling();
   currentUser = null;
   currentGroup = null;
-  participantsCache = [];
   activeHangarUserId = null;
   activeHangarUsername = "";
   activeHangarIsMine = true;
@@ -468,6 +466,15 @@ function renderGroupPanel(group) {
       actions = '<div class="admin-list-actions"><button class="button button-quiet danger-button" type="button" data-group-kick="' +
         escapeHtml(member.id) + '" data-group-user-name="' + escapeHtml(member.username) + '">Kick</button></div>';
     }
+    if (!isSelf) {
+      const viewHangar = '<button class="button button-quiet button-small" type="button" data-group-view-hangar="' +
+        escapeHtml(member.id) + '" data-group-view-hangar-name="' + escapeHtml(member.username) + '">View Hangar</button>';
+      if (actions.indexOf('<div class="admin-list-actions">') === 0) {
+        actions = actions.replace('</div>', viewHangar + '</div>');
+      } else {
+        actions = '<div class="admin-list-actions">' + actions + viewHangar + '</div>';
+      }
+    }
     return '<div class="admin-list-row"><div class="admin-list-copy"><strong>' +
       escapeHtml(member.username) + '</strong><small>' + escapeHtml(roleLabel) + '</small></div>' +
       actions + '</div>';
@@ -514,55 +521,10 @@ async function createOrJoinGroup(path, body, button, messageElement) {
     setBusy(button, false);
   }
 }
-function avatarMarkup(base64, username, className) {
-  const initial = username ? username.slice(0, 1).toUpperCase() : "?";
-  if (base64) {
-    return '<img class="' + className + '" src="data:image/jpeg;base64,' +
-      escapeHtml(base64) + '" alt="' + escapeHtml(username || "Participant") + ' profile picture">';
-  }
-  return '<span class="' + className + ' avatar-fallback" aria-hidden="true">' +
-    escapeHtml(initial) + '</span>';
-}
-
 function renderTopbarAvatar(base64, username) {
   $("#topbar-avatar").innerHTML = base64
     ? '<img src="data:image/jpeg;base64,' + escapeHtml(base64) + '" alt="">'
     : escapeHtml(username ? username.slice(0, 1).toUpperCase() : "?");
-}
-
-async function loadParticipants() {
-  showMessage($("#participants-message"), "", false);
-  $("#participants-list").innerHTML = '<p class="muted">Loading participants…</p>';
-  try {
-    const result = await api("/api/participants");
-    participantsCache = Array.isArray(result.participants) ? result.participants : [];
-    $("#participants-count").textContent = String(participantsCache.length);
-    if (!participantsCache.length) {
-      $("#participants-list").innerHTML = '<div class="feed-empty"><strong>No participants yet</strong>Group members will appear here after they create an account.</div>';
-      return;
-    }
-    $("#participants-list").innerHTML = participantsCache.map(function (person) {
-      const aircraft = person.planes && person.planes.length
-        ? person.planes.map(function (name) { return '<span class="post-plane">' + escapeHtml(name) + '</span>'; }).join("")
-        : '<span class="participant-no-planes">No aircraft listed yet</span>';
-      return '<article class="participant-card">' +
-        '<div class="participant-top">' +
-          avatarMarkup(person.avatarBase64, person.username, "participant-avatar") +
-          '<div class="participant-name"><strong>' + escapeHtml(person.username) + '</strong>' +
-          '<small>' + (person.id === currentUser.id ? "You" : "Group member") + '</small></div>' +
-        '</div>' +
-        '<div class="participant-week-stat"><strong>' + escapeHtml(String(person.weeksCompleted || 0)) +
-        '</strong><span>weeks with a logged session</span></div>' +
-        '<div class="participant-aircraft"><span class="post-plane-label">Hangar aircraft</span>' +
-        '<div class="post-planes">' + aircraft + '</div></div>' +
-        '<button class="button button-quiet button-small participant-hangar-button" type="button" data-view-hangar="' +
-        escapeHtml(person.id) + '" data-view-hangar-name="' + escapeHtml(person.username) + '">View Hangar</button>' +
-      '</article>';
-    }).join("");
-  } catch (error) {
-    $("#participants-list").innerHTML = "";
-    showMessage($("#participants-message"), error.message, false);
-  }
 }
 
 function openHangar(userId, username) {
@@ -749,7 +711,6 @@ function switchView(view) {
   const isFeed = view === "feed";
   const isMine = view === "mine";
   const isLog = view === "log";
-  const isParticipants = view === "participants";
   const isHangar = view === "hangar";
   const isSettings = view === "settings";
   const isGroup = view === "group";
@@ -757,21 +718,18 @@ function switchView(view) {
   $("#feed-view").hidden = !isFeed;
   $("#my-logs-view").hidden = !isMine;
   $("#log-view").hidden = !isLog;
-  $("#participants-view").hidden = !isParticipants;
   $("#hangar-view").hidden = !isHangar;
   $("#settings-view").hidden = !isSettings;
   $("#group-view").hidden = !isGroup;
   $("#admin-view").hidden = !isAdminView;
   $("#feed-tab").classList.toggle("active", isFeed);
   $("#my-logs-tab").classList.toggle("active", isMine);
-  $("#participants-tab").classList.toggle("active", isParticipants);
   $("#hangar-tab").classList.toggle("active", isHangar);
   $("#settings-tab").classList.toggle("active", isSettings);
   $("#group-tab").classList.toggle("active", isGroup);
   $("#admin-tab").classList.toggle("active", isAdminView);
   $("#feed-tab").toggleAttribute("aria-current", isFeed);
   $("#my-logs-tab").toggleAttribute("aria-current", isMine);
-  $("#participants-tab").toggleAttribute("aria-current", isParticipants);
   $("#hangar-tab").toggleAttribute("aria-current", isHangar);
   $("#settings-tab").toggleAttribute("aria-current", isSettings);
   $("#group-tab").toggleAttribute("aria-current", isGroup);
@@ -791,7 +749,6 @@ function switchView(view) {
     stopFeedPolling();
   }
   if (isMine) loadMyLogs();
-  if (view === "participants") loadParticipants();
   if (view === "hangar") loadHangar();
   if (view === "settings") loadSettings();
   if (isGroup) loadGroupPanel();
@@ -1025,7 +982,6 @@ async function checkSession() {
       if (previousGroupId !== nextGroupId) {
         stopFeedPolling();
         feedState = { posts: [], hasMore: false, nextCursor: null, loading: false };
-        participantsCache = [];
         activeHangarUserId = null;
         activeHangarUsername = "";
         activeHangarIsMine = true;
@@ -1161,7 +1117,6 @@ $("#admin-users-list").addEventListener("click", async function (event) {
     await api("/api/admin/users/" + encodeURIComponent(userId) + "/kick", { method: "POST" });
     await loadAdminPanel();
     await loadGroupPanel();
-    await loadParticipants();
     toast(username + " was removed from the group.");
   } catch (error) {
     showMessage($("#admin-message"), error.message, false);
@@ -1240,10 +1195,14 @@ $("#group-regenerate-code").addEventListener("click", async function () {
   }
 });
 $("#group-members-list").addEventListener("click", async function (event) {
-  const button = event.target.closest("[data-group-role], [data-group-transfer-owner], [data-group-kick]");
+  const button = event.target.closest("[data-group-view-hangar], [data-group-role], [data-group-transfer-owner], [data-group-kick]");
   if (!button || !currentGroup) return;
+  if (button.hasAttribute("data-group-view-hangar")) {
+    openHangar(button.getAttribute("data-group-view-hangar"), button.getAttribute("data-group-view-hangar-name"));
+    return;
+  }
   const userId = button.getAttribute("data-group-user-id") ||
-    button.getAttribute("data-group-transfer-owner") || button.getAttribute("data-group-kick");
+      button.getAttribute("data-group-transfer-owner") || button.getAttribute("data-group-kick");
   const username = button.getAttribute("data-group-user-name") || "this participant";
 
   if (button.hasAttribute("data-group-role")) {
@@ -1287,7 +1246,6 @@ $("#group-members-list").addEventListener("click", async function (event) {
     try {
       await api("/api/group/members/" + encodeURIComponent(userId) + "/kick", { method: "POST", body: {} });
       await loadGroupPanel();
-      await loadParticipants();
       await loadAdminPanelIfOpen();
       toast(username + " was removed from the group.");
     } catch (error) {
@@ -1328,17 +1286,11 @@ $("#group-leave-button").addEventListener("click", async function () {
   }
 });
 
-$("#participants-tab").addEventListener("click", function () { switchView("participants"); });
 $("#hangar-tab").addEventListener("click", function () {
   openHangar(currentUser.id, currentUser.username);
 });
 $("#settings-tab").addEventListener("click", function () { switchView("settings"); });
-$("#participants-list").addEventListener("click", function (event) {
-  const button = event.target.closest("[data-view-hangar]");
-  if (!button) return;
-  openHangar(button.getAttribute("data-view-hangar"), button.getAttribute("data-view-hangar-name"));
-});
-$("#hangar-back-button").addEventListener("click", function () { switchView("participants"); });
+$("#hangar-back-button").addEventListener("click", function () { switchView("group"); });
 
 $("#hangar-photo").addEventListener("change", function () {
   handleHangarPhotoSelection(this.files && this.files[0]);
@@ -1367,7 +1319,6 @@ $("#hangar-form").addEventListener("submit", async function (event) {
     resetHangarPhoto();
     showMessage($("#hangar-form-message"), "Aircraft added to your Hangar.", true);
     await loadHangar();
-    await loadParticipants();
     toast("Aircraft added to your Hangar.");
   } catch (error) {
     showMessage($("#hangar-form-message"), error.message, false);
@@ -1385,7 +1336,6 @@ $("#hangar-list").addEventListener("click", async function (event) {
   try {
     await api("/api/hangar/" + encodeURIComponent(id), { method: "DELETE" });
     await loadHangar();
-    await loadParticipants();
     toast("Aircraft removed from your Hangar.");
   } catch (error) {
     showMessage($("#hangar-message"), error.message, false);
@@ -1424,7 +1374,6 @@ $("#settings-form").addEventListener("submit", async function (event) {
     updateSettingsAvatarPreview();
     showMessage($("#settings-message"), "Your profile has been updated.", true);
     if (!currentUser.isAdmin && !$("#admin-view").hidden) switchView("feed");
-    await loadParticipants();
     toast("Settings saved.");
   } catch (error) {
     showMessage($("#settings-message"), error.message, false);
